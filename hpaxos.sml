@@ -22,12 +22,18 @@ struct
 
     datatype state = State of known_msgs * recent_msgs
 
-    (* cache state *)
-    datatype msg_ballot_cache = MsgBallotCache of ballot MsgMap.map
-    datatype msg_value_cache = MsgValueCache of value MsgMap.map
-    datatype cache = Cache of msg_ballot_cache * msg_value_cache
+    (* message info state *)
+    datatype info_bal_val = InfoBalVal of ballot * value
+    (* datatype info_W = InfoW of  *)
+    datatype msg_info = MsgInfo of info_bal_val MsgMap.map
 
-    datatype acceptor = Acc of acceptor_id * state * cache
+    (* memo state *)
+    (* datatype msg_ballot_cache = MsgBallotCache of ballot MsgMap.map *)
+    (* datatype msg_value_cache = MsgValueCache of value MsgMap.map *)
+    (* datatype cache = Cache of msg_ballot_cache * msg_value_cache *)
+    datatype cache = Cache of int
+
+    datatype acceptor = Acc of acceptor_id * state * msg_info * cache
 
     type t = acceptor
     type node_id = acceptor_id
@@ -42,54 +48,34 @@ struct
     fun add_recent (m : msg) (State (k, RecentMsgs(r))) : state =
         State (k, RecentMsgs (MsgSet.add (r, m)))
 
-    fun compute_ballot (m : msg) c : ballot * msg =
+    fun compute_bal_val (m : msg) (MsgInfo (info)) : ballot * value =
         if Msg.is_one_a m then
-            (Option.valOf(Msg.get_bal m), m)
+            Option.valOf (Msg.get_bal_val m)
         else
             let
-                val refs = Msg.get_refs m (* must be non-empty *)
-                val Cache (MsgBallotCache(bc), _) = c
-                fun helper (m, (max_bal, max_msg)) =
-                    let val b = MsgMap.lookup (bc, m) in
-                        case Msg.Ballot.compare (b, max_bal) of
-                            LESS => (max_bal, max_msg)
-                          | _ => (b, m)
+                val refs = Msg.get_refs m (* must be non-empty since not 1a *)
+                fun helper (m, (mbal, mval)) =
+                    let val InfoBalVal (b, v) = MsgMap.lookup (info, m) in
+                        case Msg.Ballot.compare (b, mbal) of
+                            LESS => (mbal, mval)
+                          | _ => (b, v)
                     end
             in
-                List.foldr helper (Msg.Ballot.zero, m) refs
+                List.foldr helper (Msg.Ballot.zero, Msg.Value.default) refs
             end
 
-    fun compute_and_store_ballot (m : msg) c : cache =
+    fun compute_and_store_bal_val (m : msg) info : msg_info =
         let
-            val (bal, _) = compute_ballot m c
-            val Cache (MsgBallotCache(bc), vc) = c
+            val bv = compute_bal_val m info
+            val MsgInfo (info) = info
         in
-            Cache (MsgBallotCache (MsgMap.insert (bc, m, bal)), vc)
-        end
-
-    fun compute_value (m : msg) c : value =
-        if Msg.is_one_a m then
-            Option.valOf(Msg.get_val m)
-        else
-            let
-                val (_, max_msg) = compute_ballot m c
-                val Cache (_, MsgValueCache(vc)) = c
-            in
-                MsgMap.lookup (vc, max_msg)
-            end
-
-    fun compute_and_store_value (m : msg) c : cache =
-        let
-            val v = compute_value m c
-            val Cache (bc, MsgValueCache(vc)) = c
-        in
-            Cache (bc, MsgValueCache (MsgMap.insert (vc, m, v)))
+            MsgInfo (MsgMap.insert (info, m, InfoBalVal(bv)))
         end
 
     fun hpaxos_node (id : node_id) : t =
         Acc (id,
              State (KnownMsgs (MsgSet.empty),
                     RecentMsgs (MsgSet.empty)),
-             Cache (MsgBallotCache (MsgMap.empty),
-                    MsgValueCache (MsgMap.empty)))
+             MsgInfo (MsgMap.empty),
+             Cache (0))
 end

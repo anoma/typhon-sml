@@ -3,6 +3,7 @@
 signature HPAXOS_VALUE =
 sig
     type t
+    val default : t
 end
 
 signature HPAXOS_BALLOT =
@@ -28,11 +29,8 @@ sig
     val is_one_b : t -> bool
     val is_two_a : t -> bool
 
-    (* if the message is 1a, return its ballot; otherwise, return NONE *)
-    val get_bal : t -> ballot option
-
-    (* if the message is 1a, return its ballot; otherwise, return NONE *)
-    val get_val : t -> value option
+    (* if the message is 1a, return its ballot and value; otherwise, return NONE *)
+    val get_bal_val : t -> (ballot * value) option
 
     (* returns a previous message of the sender *)
     val get_prev : t -> t option
