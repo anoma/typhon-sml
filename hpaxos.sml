@@ -40,23 +40,29 @@ struct
     fun add_recent (m : msg) (State (k, RecentMsgs(r))) : state =
         State (k, RecentMsgs (MsgSet.add (r, m)))
 
+    fun compute_ballot (m : msg) c : ballot =
+        if Msg.is_one_a m then
+            Option.valOf(Msg.get_bal m)
+        else
+            let
+                val refs = Msg.get_refs m (* must be non-empty *)
+                val Cache (MsgBallotCache(bs)) = c
+                fun helper (m, maxb) =
+                    let val b = MsgMap.lookup (bs, m) in
+                        case Msg.Ballot.compare (b, maxb) of
+                            GREATER => b
+                          | _ => maxb
+                    end
+            in
+                List.foldr helper Msg.Ballot.zero refs
+            end
+
     fun compute_and_store_ballot (m : msg) c : cache =
-        let val refs = Msg.get_refs m in
-            if List.null refs then
-                c
-            else
-                let
-                    val Cache (MsgBallotCache(bs)) = c
-                    fun helper (m, maxb) =
-                        let val b = MsgMap.lookup (bs, m) in
-                            case Msg.Ballot.compare (b, maxb) of
-                                GREATER => b
-                              | _ => maxb
-                        end
-                    val maxb = List.foldr helper Msg.Ballot.zero refs
-                in
-                    Cache (MsgBallotCache (MsgMap.insert (bs, m, maxb)))
-                end
+        let
+            val bal = compute_ballot m c
+            val Cache (MsgBallotCache(bs)) = c
+        in
+            Cache (MsgBallotCache (MsgMap.insert (bs, m, bal)))
         end
 
     fun hpaxos_node (id : node_id) : t =
