@@ -40,10 +40,8 @@ struct
     fun add_recent (m : msg) (State (k, RecentMsgs(r))) : state =
         State (k, RecentMsgs (MsgSet.add (r, m)))
 
-    fun compute_and_store_ballot (m : msg) c  : cache =
-        let
-            val refs = Msg.get_refs m
-        in
+    fun compute_and_store_ballot (m : msg) c : cache =
+        let val refs = Msg.get_refs m in
             if List.null refs then
                 c
             else
