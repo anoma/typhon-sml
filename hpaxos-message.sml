@@ -8,6 +8,7 @@ end
 signature HPAXOS_BALLOT =
 sig
     type t
+    val compare : t * t -> order
 end
 
 signature HPAXOS_MESSAGE =
@@ -31,6 +32,12 @@ sig
 
     (* if the message is 1a, return its ballot; otherwise, return NONE *)
     val get_val : t -> value option
+
+    (* returns a previous message of the sender *)
+    val get_prev : t -> t option
+
+    (* returns a list of direct references *)
+    val get_refs : t -> t list
 end
 
 functor MessageOrdKey (Msg : HPAXOS_MESSAGE) : ORD_KEY =
