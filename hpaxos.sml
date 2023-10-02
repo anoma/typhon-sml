@@ -1,4 +1,6 @@
 use "hpaxos-message.sml";
+use "learner-graph.sml";
+use "util.sml";
 
 signature HPAXOS_NODE =
 sig
@@ -9,12 +11,19 @@ end
 
 functor HPaxos (structure Msg : HPAXOS_MESSAGE) :> HPAXOS_NODE =
 struct
+    type msg = Msg.t
+
     type acceptor_id = word
     type ballot = Msg.Ballot.t
     type value = Msg.Value.t
 
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
     structure MsgMap : ORD_MAP = RedBlackMapFn (MessageOrdKey (Msg))
+    structure LearnerAcceptorMap : ORD_MAP =
+        RedBlackMapFn (
+            ProdLexOrdKey
+                (LearnerOrdKey (Msg.Learner))
+                (AcceptorOrdKey (Msg.Acceptor)))
 
     (* algorithm state *)
     datatype known_msgs = KnownMsgs of MsgSet.set
@@ -24,8 +33,8 @@ struct
 
     (* message info state *)
     datatype info_bal_val = InfoBalVal of ballot * value
-    (* datatype info_W = InfoW of  *)
-    datatype msg_info = MsgInfo of info_bal_val MsgMap.map
+    datatype info_W = InfoW of (msg * msg option) MsgMap.map
+    datatype msg_info = MsgInfo of (info_bal_val * info_W) MsgMap.map
 
     (* memo state *)
     (* datatype msg_ballot_cache = MsgBallotCache of ballot MsgMap.map *)
@@ -37,7 +46,6 @@ struct
 
     type t = acceptor
     type node_id = acceptor_id
-    type msg = Msg.t
 
     fun is_known (m : msg) (State (KnownMsgs(k), r)) : bool =
         MsgSet.member (k, m)
@@ -55,7 +63,7 @@ struct
             let
                 val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
                 fun helper (x, (max_bal, max_val)) =
-                    let val InfoBalVal (b, v) = MsgMap.lookup (info, x) in
+                    let val (InfoBalVal (b, v), _) = MsgMap.lookup (info, x) in
                         case Msg.Ballot.compare (b, max_bal) of
                             LESS => (max_bal, max_val)
                           | _ => (b, v)
