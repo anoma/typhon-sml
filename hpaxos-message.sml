@@ -1,5 +1,6 @@
 (* HPaxos Message *)
 
+use "learner.sml";
 use "hpaxos-acceptor.sml";
 
 signature HPAXOS_VALUE =
@@ -28,11 +29,17 @@ sig
     structure Acceptor : ACCEPTOR
     type acceptor = Acceptor.t
 
+    structure Learner : LEARNER
+    type learner = Learner.t
+
     val hash : t -> word
 
     val is_one_a : t -> bool
     val is_one_b : t -> bool
     val is_two_a : t -> bool
+
+    (* if the message is 2a, return its learner instance; otherwise, return NONE *)
+    val learner : t -> learner option
 
     (* returns message sender *)
     val sender : t -> acceptor
