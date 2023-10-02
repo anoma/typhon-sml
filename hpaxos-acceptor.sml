@@ -4,7 +4,7 @@ sig
     val pubkey : t -> word
 end
 
-functor AcceptorOrdkey (A : ACCEPTOR) : ORD_KEY =
+functor AcceptorOrdKey (A : ACCEPTOR) : ORD_KEY =
 struct
     type ord_key = A.t
     fun compare (a1, a2) = Word.compare (A.pubkey a1, A.pubkey a2)
