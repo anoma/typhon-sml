@@ -53,11 +53,11 @@ struct
             Option.valOf (Msg.get_bal_val m)
         else
             let
-                val refs = Msg.get_refs m (* must be non-empty since not 1a *)
-                fun helper (m, (mbal, mval)) =
-                    let val InfoBalVal (b, v) = MsgMap.lookup (info, m) in
-                        case Msg.Ballot.compare (b, mbal) of
-                            LESS => (mbal, mval)
+                val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
+                fun helper (x, (max_bal, max_val)) =
+                    let val InfoBalVal (b, v) = MsgMap.lookup (info, x) in
+                        case Msg.Ballot.compare (b, max_bal) of
+                            LESS => (max_bal, max_val)
                           | _ => (b, v)
                     end
             in
