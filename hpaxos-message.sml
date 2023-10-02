@@ -1,5 +1,7 @@
 (* HPaxos Message *)
 
+use "hpaxos-acceptor.sml";
+
 signature HPAXOS_VALUE =
 sig
     type t
@@ -23,11 +25,17 @@ sig
     structure Ballot : HPAXOS_BALLOT
     type ballot = Ballot.t
 
+    structure Acceptor : ACCEPTOR
+    type acceptor = Acceptor.t
+
     val hash : t -> word
 
     val is_one_a : t -> bool
     val is_one_b : t -> bool
     val is_two_a : t -> bool
+
+    (* returns message sender *)
+    val sender : t -> acceptor
 
     (* if the message is 1a, return its ballot and value; otherwise, return NONE *)
     val get_bal_val : t -> (ballot * value) option
