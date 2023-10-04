@@ -6,7 +6,8 @@ use "hpaxos-acceptor.sml";
 signature HPAXOS_VALUE =
 sig
     type t
-    val default : t
+    val default : t (* default value *)
+    val eq : t * t -> bool (* equality *)
 end
 
 signature HPAXOS_BALLOT =
