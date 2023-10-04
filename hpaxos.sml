@@ -32,14 +32,11 @@ struct
     datatype state = State of known_msgs * recent_msgs
 
     (* message info state *)
-    datatype info_bal_val = InfoBalVal of ballot * value
-    datatype info_W = InfoW of (msg * msg option) MsgMap.map
-    datatype msg_info = MsgInfo of (info_bal_val * info_W) MsgMap.map
+    datatype info_bal_val = InfoBalVal of (ballot * value) MsgMap.map
+    datatype info_W = InfoW of ((msg * msg option) LearnerAcceptorMap.map) MsgMap.map
+    datatype msg_info = MsgInfo of info_bal_val * info_W
 
     (* memo state *)
-    (* datatype msg_ballot_cache = MsgBallotCache of ballot MsgMap.map *)
-    (* datatype msg_value_cache = MsgValueCache of value MsgMap.map *)
-    (* datatype cache = Cache of msg_ballot_cache * msg_value_cache *)
     datatype cache = Cache of int
 
     datatype acceptor = Acc of acceptor_id * state * msg_info * cache
@@ -47,43 +44,98 @@ struct
     type t = acceptor
     type node_id = acceptor_id
 
-    fun is_known (m : msg) (State (KnownMsgs(k), r)) : bool =
+    fun is_known (m : msg) (State (KnownMsgs k, r)) : bool =
         MsgSet.member (k, m)
 
-    fun add_known (m : msg) (State (KnownMsgs(k), r)) : state =
+    fun add_known (m : msg) (State (KnownMsgs k, r)) : state =
         State (KnownMsgs (MsgSet.add (k, m)), r)
 
-    fun add_recent (m : msg) (State (k, RecentMsgs(r))) : state =
+    fun add_recent (m : msg) (State (k, RecentMsgs r)) : state =
         State (k, RecentMsgs (MsgSet.add (r, m)))
 
-    fun compute_bal_val (m : msg) (MsgInfo (info)) : ballot * value =
+    fun compute_bal_val (m : msg) (InfoBalVal info) : ballot * value =
         if Msg.is_one_a m then
             Option.valOf (Msg.get_bal_val m)
         else
             let
-                val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
                 fun helper (x, (max_bal, max_val)) =
-                    let val (InfoBalVal (b, v), _) = MsgMap.lookup (info, x) in
+                    let val (b, v) = MsgMap.lookup (info, x) in
                         case Msg.Ballot.compare (b, max_bal) of
                             LESS => (max_bal, max_val)
                           | _ => (b, v)
                     end
+                val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
             in
                 List.foldr helper (Msg.Ballot.zero, Msg.Value.default) refs
             end
 
-    fun compute_and_store_bal_val (m : msg) info : msg_info =
+    fun compute_W (m : msg) (InfoBalVal info) : (msg * msg option) LearnerAcceptorMap.map =
         let
-            val bv = compute_bal_val m info
-            val MsgInfo (info) = info
+            fun pick_best_two (ms : msg list) (InfoBalVal info) : (msg * msg option) option =
+                let
+                    fun picker (x, NONE) = SOME (x, NONE)
+                      | picker (x, SOME (best1, o_best2)) =
+                        let
+                            val (b, v) = MsgMap.lookup (info, x)
+                            val (bal1, val1) = MsgMap.lookup (info, best1)
+                            fun pick_second_best fst_best_val candidate (candidate_bal, candidate_val) cur_snd_best_option =
+                                if Msg.Value.eq (candidate_val, fst_best_val) then
+                                    cur_snd_best_option
+                                else
+                                    let
+                                        val new_snd_best =
+                                            case cur_snd_best_option of
+                                                NONE => candidate
+                                              | SOME cur_snd_best =>
+                                                let val (bal2, _) = MsgMap.lookup (info, cur_snd_best) in
+                                                    case Msg.Ballot.compare (candidate_bal, bal2) of
+                                                        GREATER => candidate
+                                                      | _ => cur_snd_best
+                                                end
+                                    in
+                                        SOME new_snd_best
+                                    end
+                            val new_best =
+                                case Msg.Ballot.compare (b, bal1) of
+                                    GREATER => (x, pick_second_best v best1 (bal1, val1) o_best2)
+                                  | _ => (best1, pick_second_best val1 x (b, v) o_best2)
+                        in
+                            SOME new_best
+                        end
+                in
+                    List.foldr picker NONE ms
+                end
+            fun helper (r, w) =
+                let val x = []
+                in w
+                end
+            val refs = Msg.get_refs m
+            val w0 =
+                if Msg.is_two_a m then
+                    let val lrn = valOf (Msg.learner m)
+                        val acc = Msg.sender m
+                    in
+                        LearnerAcceptorMap.insert
+                            (LearnerAcceptorMap.empty, (lrn, acc), (m, NONE))
+                    end
+                else
+                    LearnerAcceptorMap.empty
         in
-            MsgInfo (MsgMap.insert (info, m, InfoBalVal(bv)))
+            List.foldr helper w0 refs
         end
+
+    (* fun compute_and_store_bal_val (m : msg) info : msg_info = *)
+    (*     let *)
+    (*         val bv = compute_bal_val m info *)
+    (*         val MsgInfo (info) = info *)
+    (*     in *)
+    (*         MsgInfo (MsgMap.insert (info, m, InfoBalVal(bv))) *)
+    (*     end *)
 
     fun hpaxos_node (id : node_id) : t =
         Acc (id,
-             State (KnownMsgs (MsgSet.empty),
-                    RecentMsgs (MsgSet.empty)),
-             MsgInfo (MsgMap.empty),
-             Cache (0))
+             State (KnownMsgs MsgSet.empty,
+                    RecentMsgs MsgSet.empty),
+             MsgInfo (InfoBalVal MsgMap.empty, InfoW MsgMap.empty),
+             Cache 0)
 end
