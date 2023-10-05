@@ -34,6 +34,7 @@ sig
     type learner = Learner.t
 
     val hash : t -> word
+    val eq : t * t -> bool
 
     val is_one_a : t -> bool
     val is_one_b : t -> bool
