@@ -61,3 +61,15 @@ struct
     type ord_key = Msg.t
     fun compare (m1, m2) = Word.compare (Msg.hash m1, Msg.hash m2)
 end
+
+functor MessageUtil (Msg : HPAXOS_MESSAGE) =
+struct
+    (* TODO can be optimized *)
+    fun is_prev_reachable (m1, m2) =
+        let fun doit NONE = false
+              | doit (SOME m) =
+                Msg.eq (m, m2) orelse doit (Msg.get_prev m)
+        in
+            doit (SOME m1)
+        end
+end
