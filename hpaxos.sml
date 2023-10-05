@@ -105,10 +105,8 @@ struct
                     List.foldr picker NONE ms
                 end
             fun pick_best_two (a : msg * msg option, b : msg * msg option) =
-                let fun to_list (best1, o_best2) =
-                        case o_best2 of
-                            NONE => [best1]
-                          | SOME best2 => [best1, best2]
+                let fun to_list (best1, NONE) = [best1]
+                      | to_list (best1, SOME best2) = [best1, best2]
                 in
                     Option.valOf (pick_best_two_from_list (List.concat [to_list a, to_list b]))
                 end
