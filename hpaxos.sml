@@ -17,8 +17,11 @@ struct
     type ballot = Msg.Ballot.t
     type value = Msg.Value.t
 
+    structure MsgUtil = MessageUtil (Msg)
+
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
     structure MsgMap : ORD_MAP = RedBlackMapFn (MessageOrdKey (Msg))
+    structure AcceptorMap : ORD_MAP = RedBlackMapFn (AcceptorOrdKey (Msg.Acceptor))
     structure LearnerAcceptorMap : ORD_MAP =
         RedBlackMapFn (
             ProdLexOrdKey
@@ -32,9 +35,26 @@ struct
     datatype state = State of known_msgs * recent_msgs
 
     (* message info state *)
+    structure AcceptorStatus =
+    struct
+        datatype status = Caught
+                        | Uncaught of msg
+        type t = status
+
+        fun join (Uncaught m1, Uncaught m2) =
+            if MsgUtil.is_prev_reachable (m1, m2) then
+                Uncaught m1
+            else if MsgUtil.is_prev_reachable (m2, m1) then
+                Uncaught m2
+            else
+                Caught
+          | join (_, _) = Caught
+    end
+
     datatype info_bal_val = InfoBalVal of (ballot * value) MsgMap.map
     datatype info_W = InfoW of ((msg * msg option) LearnerAcceptorMap.map) MsgMap.map
-    datatype msg_info = MsgInfo of info_bal_val * info_W
+    datatype info_acc_status = InfoAccStatus of (AcceptorStatus.t AcceptorMap.map) MsgMap.map
+    datatype msg_info = MsgInfo of info_bal_val * info_W * info_acc_status
 
     (* memo state *)
     datatype cache = Cache of int
@@ -111,45 +131,46 @@ struct
                     Option.valOf (pick_best_two_from_list (List.concat [to_list a, to_list b]))
                 end
             fun helper (r, w) =
-                let val r_info_w = MsgMap.lookup (info_w, r)
+                let val r_w = MsgMap.lookup (info_w, r)
                 in
-                    LearnerAcceptorMap.unionWith pick_best_two (r_info_w, w)
+                    LearnerAcceptorMap.unionWith pick_best_two (r_w, w)
                 end
-            val refs = Msg.get_refs m
             val w0 =
                 if Msg.is_two_a m then
-                    let
-                        val lrn = Option.valOf (Msg.learner m)
-                        val acc = Msg.sender m
-                    in
-                        LearnerAcceptorMap.insert
-                            (LearnerAcceptorMap.empty, (lrn, acc), (m, NONE))
-                    end
+                    LearnerAcceptorMap.insert
+                        (LearnerAcceptorMap.empty,
+                         (Option.valOf (Msg.learner m), Msg.sender m),
+                         (m, NONE))
                 else
                     LearnerAcceptorMap.empty
         in
-            List.foldr helper w0 refs
+            List.foldr helper w0 (Msg.get_refs m)
         end
 
-    datatype AcceptorStatus = Caught
-                            | Uncaught of msg
-
-    fun join (Uncaught m1, Uncaught m2) =
-        Uncaught m1
-      | join (_, _) = Caught
-
-    (* fun compute_and_store_bal_val (m : msg) info : msg_info = *)
-    (*     let *)
-    (*         val bv = compute_bal_val m info *)
-    (*         val MsgInfo (info) = info *)
-    (*     in *)
-    (*         MsgInfo (MsgMap.insert (info, m, InfoBalVal(bv))) *)
-    (*     end *)
+    fun compute_acceptor_status (m : msg) (InfoAccStatus info)
+        : AcceptorStatus.t AcceptorMap.map =
+        (* assume: m is not 1a *)
+        let
+            fun helper (r, s) =
+                let val r_acc_status = MsgMap.lookup (info, r) in
+                    AcceptorMap.unionWith AcceptorStatus.join (r_acc_status, s)
+                end
+            val s0 =
+                if not (Msg.is_one_a m) then
+                    AcceptorMap.insert
+                        (AcceptorMap.empty, Msg.sender m, AcceptorStatus.Uncaught m)
+                else
+                    AcceptorMap.empty
+        in
+            List.foldr helper s0 (Msg.get_refs m)
+        end
 
     fun hpaxos_node (id : node_id) : t =
         Acc (id,
              State (KnownMsgs MsgSet.empty,
                     RecentMsgs MsgSet.empty),
-             MsgInfo (InfoBalVal MsgMap.empty, InfoW MsgMap.empty),
+             MsgInfo (InfoBalVal MsgMap.empty,
+                      InfoW MsgMap.empty,
+                      InfoAccStatus MsgMap.empty),
              Cache 0)
 end
