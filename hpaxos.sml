@@ -89,14 +89,13 @@ struct
                 List.foldr helper (Msg.Ballot.zero, Msg.Value.default) refs
             end
 
-    fun compute_W (m : msg) (InfoBalVal info_bal_val) (InfoW info_w) : (msg * msg option) LearnerAcceptorMap.map =
+    fun compute_W (m : msg) (InfoBalVal info_bal_val) (InfoW info_w)
+        : (msg * msg option) LearnerAcceptorMap.map =
         let
             fun pick_best_two_from_list (ms : msg list) : (msg * msg option) option =
                 let fun picker (x, NONE) = SOME (x, NONE)
                       | picker (x, SOME (best1, o_best2)) =
                         let
-                            val (b, v) = MsgMap.lookup (info_bal_val, x)
-                            val (bal1, val1) = MsgMap.lookup (info_bal_val, best1)
                             fun pick_second_best
                                     fst_best_val candidate (candidate_bal, candidate_val) cur_snd_best_option =
                                 if Msg.Value.eq (candidate_val, fst_best_val) then
@@ -114,6 +113,8 @@ struct
                                     in
                                         SOME new_snd_best
                                     end
+                            val (b, v) = MsgMap.lookup (info_bal_val, x)
+                            val (bal1, val1) = MsgMap.lookup (info_bal_val, best1)
                             val new_best =
                                 case Msg.Ballot.compare (b, bal1) of
                                     GREATER => (x, pick_second_best v best1 (bal1, val1) o_best2)
