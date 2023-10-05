@@ -1,2 +1,2 @@
 # typhon-sml
-Typhon reference implementation in SML
+Typhon reference implementation in Standard ML
