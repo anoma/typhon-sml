@@ -131,6 +131,13 @@ struct
             List.foldr helper w0 refs
         end
 
+    datatype AcceptorStatus = Caught
+                            | Uncaught of msg
+
+    fun join (Uncaught m1, Uncaught m2) =
+        Uncaught m1
+      | join (_, _) = Caught
+
     (* fun compute_and_store_bal_val (m : msg) info : msg_info = *)
     (*     let *)
     (*         val bv = compute_bal_val m info *)
