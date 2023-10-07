@@ -27,11 +27,11 @@ sig
     structure Ballot : HPAXOS_BALLOT
     type ballot = Ballot.t
 
-    structure Acceptor : ACCEPTOR
-    type acceptor = Acceptor.t
-
     structure Learner : LEARNER
     type learner = Learner.t
+
+    structure Acceptor : ACCEPTOR
+    type acceptor = Acceptor.t
 
     val hash : t -> word
     val eq : t * t -> bool
