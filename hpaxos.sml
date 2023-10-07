@@ -6,16 +6,21 @@ signature HPAXOS_NODE =
 sig
     type t
     type node_id
-    val hpaxos_node : node_id -> t
+    type learner_graph
+    val hpaxos_node : node_id -> learner_graph -> t
 end
 
-functor HPaxos (structure Msg : HPAXOS_MESSAGE) :> HPAXOS_NODE =
+functor HPaxos (structure Msg : HPAXOS_MESSAGE
+                structure LearnerGraph : LEARNER_GRAPH
+                sharing Msg.Learner = LearnerGraph.Learner
+                    and Msg.Acceptor = LearnerGraph.Acceptor) :> HPAXOS_NODE =
 struct
     type msg = Msg.t
 
     type acceptor_id = word
     type ballot = Msg.Ballot.t
     type value = Msg.Value.t
+    type learner_graph = LearnerGraph.t
 
     structure MsgUtil = MessageUtil (Msg)
 
@@ -54,12 +59,16 @@ struct
     datatype info_bal_val = InfoBalVal of (ballot * value) MsgMap.map
     datatype info_W = InfoW of ((msg * msg option) LearnerAcceptorMap.map) MsgMap.map
     datatype info_acc_status = InfoAccStatus of (AcceptorStatus.t AcceptorMap.map) MsgMap.map
-    datatype msg_info = MsgInfo of info_bal_val * info_W * info_acc_status
+    datatype info_unburied_2as = InfoUnburied of MsgSet.set MsgMap.map
+    datatype msg_info = MsgInfo of info_bal_val * info_W * info_acc_status * info_unburied_2as
 
     (* memo state *)
     datatype cache = Cache of int
 
-    datatype acceptor = Acc of acceptor_id * state * msg_info * cache
+    (* learner graph *)
+    datatype graph = Graph of learner_graph
+
+    datatype acceptor = Acc of acceptor_id * graph * state * msg_info * cache
 
     type t = acceptor
     type node_id = acceptor_id
@@ -166,8 +175,9 @@ struct
             List.foldr helper s0 (Msg.get_refs m)
         end
 
-    fun hpaxos_node (id : node_id) : t =
+    fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
         Acc (id,
+             Graph g,
              State (KnownMsgs MsgSet.empty,
                     RecentMsgs MsgSet.empty),
              MsgInfo (InfoBalVal MsgMap.empty,
