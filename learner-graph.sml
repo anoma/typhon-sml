@@ -4,14 +4,18 @@ use "learner.sml";
 signature LEARNER_GRAPH =
 sig
     type t
-end
 
-functor LearnerGraph (structure L : LEARNER)
-                     (structure E : EPOCH)
-        : LEARNER_GRAPH =
-struct
-    type epoch = E.t
-    datatype learner_graph = LearnerGraph of epoch
-    type t = learner_graph
-    fun get_epoch (LearnerGraph e) = e
+    structure Epoch : EPOCH
+    type epoch = Epoch.t
+
+    structure Learner : LEARNER
+    type learner = Learner.t
+
+    structure Acceptor : ACCEPTOR
+    type acceptor = Acceptor.t
+
+    val get_epoch : t -> epoch
+    val all_acceptors : t -> acceptor list
+
+    val is_quorum : t -> learner * acceptor list -> bool
 end
