@@ -82,20 +82,20 @@ struct
     fun add_recent (m : msg) (State (k, RecentMsgs r)) : state =
         State (k, RecentMsgs (MsgSet.add (r, m)))
 
-    fun compute_bal_val (m : msg) (InfoBalVal info) : ballot * value =
+    fun compute_bal_val (m : msg) (InfoBalVal info_bal_val) : ballot * value =
         if Msg.is_one_a m then
-            Option.valOf (Msg.get_bal_val m)
+            valOf (Msg.get_bal_val m)
         else
             let
                 fun helper (x, (max_bal, max_val)) =
-                    let val (b, v) = MsgMap.lookup (info, x) in
+                    let val (b, v) = MsgMap.lookup (info_bal_val, x) in
                         case Msg.Ballot.compare (b, max_bal) of
                             LESS => (max_bal, max_val)
                           | _ => (b, v)
                     end
                 val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
             in
-                List.foldr helper (Msg.Ballot.zero, Msg.Value.default) refs
+                List.foldl helper (Msg.Ballot.zero, Msg.Value.default) refs
             end
 
     fun compute_W (m : msg) (InfoBalVal info_bal_val) (InfoW info_w)
@@ -132,13 +132,13 @@ struct
                             SOME new_best
                         end
                 in
-                    List.foldr picker NONE ms
+                    List.foldl picker NONE ms
                 end
             fun pick_best_two (a : msg * msg option, b : msg * msg option) =
                 let fun to_list (best1, NONE) = [best1]
                       | to_list (best1, SOME best2) = [best1, best2]
                 in
-                    Option.valOf (pick_best_two_from_list (List.concat [to_list a, to_list b]))
+                    valOf (pick_best_two_from_list (List.concat [to_list a, to_list b]))
                 end
             fun helper (r, w) =
                 let val r_w = MsgMap.lookup (info_w, r)
@@ -149,30 +149,29 @@ struct
                 if Msg.is_two_a m then
                     LearnerAcceptorMap.insert
                         (LearnerAcceptorMap.empty,
-                         (Option.valOf (Msg.learner m), Msg.sender m),
+                         (valOf (Msg.learner m), Msg.sender m),
                          (m, NONE))
                 else
                     LearnerAcceptorMap.empty
         in
-            List.foldr helper w0 (Msg.get_refs m)
+            List.foldl helper w0 (Msg.get_refs m)
         end
 
-    fun compute_acceptor_status (m : msg) (InfoAccStatus info)
+    fun compute_acceptor_status (m : msg) (InfoAccStatus info_acc_status)
         : AcceptorStatus.t AcceptorMap.map =
         (* assume: m is not 1a *)
         let
             fun helper (r, s) =
-                let val r_acc_status = MsgMap.lookup (info, r) in
+                let val r_acc_status = MsgMap.lookup (info_acc_status, r) in
                     AcceptorMap.unionWith AcceptorStatus.join (r_acc_status, s)
                 end
             val s0 =
                 if not (Msg.is_one_a m) then
-                    AcceptorMap.insert
-                        (AcceptorMap.empty, Msg.sender m, AcceptorStatus.Uncaught m)
+                    AcceptorMap.singleton (Msg.sender m, AcceptorStatus.Uncaught m)
                 else
                     AcceptorMap.empty
         in
-            List.foldr helper s0 (Msg.get_refs m)
+            List.foldl helper s0 (Msg.get_refs m)
         end
 
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
