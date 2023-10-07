@@ -1,8 +1,8 @@
 signature LEARNER =
 sig
     type t
-    type learner_id = word
-    val id : t -> learner_id
+    val id : t -> word
+    val eq : t * t -> bool
 end
 
 functor LearnerOrdKey (L : LEARNER) : ORD_KEY =
