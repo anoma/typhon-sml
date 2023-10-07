@@ -174,6 +174,48 @@ struct
             List.foldl helper s0 (Msg.get_refs m)
         end
 
+    fun compute_unburied_2as (m : msg)
+                             (Graph g)
+                             (InfoBalVal info_bal_val)
+                             (InfoW info_w)
+                             (InfoUnburied info_unburied)
+        : MsgSet.set =
+        let
+            val m_lrn = valOf (Msg.learner m)
+            (* z is burying x *)
+            fun burying (x, z) =
+                Msg.is_two_a z andalso (* TODO check if redundant *)
+                Msg.Learner.eq
+                    (valOf (Msg.learner x), valOf (Msg.learner z)) andalso
+                let
+                    val (x_bal, x_val) = MsgMap.lookup (info_bal_val, x)
+                    val (z_bal, z_val) = MsgMap.lookup (info_bal_val, z)
+                in
+                    Msg.Ballot.compare (x_bal, z_bal) = LESS andalso
+                    not (Msg.Value.eq (x_val, z_val))
+                end
+            val u0 = if Msg.is_two_a m then MsgSet.singleton m else MsgSet.empty
+            fun doit (r, u) =
+                MsgSet.union (u, MsgMap.lookup (info_unburied, r))
+            val u = List.foldl doit u0 (Msg.get_refs m)
+            val m_w = MsgMap.lookup (info_w, m)
+            val all_acceptors = LearnerGraph.all_acceptors g
+            fun buried x =
+                let
+                    val x_lrn = valOf (Msg.learner x)
+                    fun doit acc =
+                        let val (best1, o_best2) = LearnerAcceptorMap.lookup (m_w, (x_lrn, acc)) in
+                            burying (x, best1) orelse
+                            (isSome o_best2 andalso burying (x, (valOf o_best2)))
+                        end
+                    val acceptors = List.filter doit all_acceptors
+                in
+                    LearnerGraph.is_quorum g (m_lrn, acceptors)
+                end
+        in
+            MsgSet.filter (not o buried) u
+        end
+
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
         Acc (id,
              Graph g,
@@ -181,6 +223,7 @@ struct
                     RecentMsgs MsgSet.empty),
              MsgInfo (InfoBalVal MsgMap.empty,
                       InfoW MsgMap.empty,
-                      InfoAccStatus MsgMap.empty),
+                      InfoAccStatus MsgMap.empty,
+                      InfoUnburied MsgMap.empty),
              Cache 0)
 end
