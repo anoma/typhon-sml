@@ -2,6 +2,7 @@ signature ACCEPTOR =
 sig
     type t
     val pubkey : t -> word
+    val eq : t * t -> bool
 end
 
 functor AcceptorOrdKey (A : ACCEPTOR) : ORD_KEY =
