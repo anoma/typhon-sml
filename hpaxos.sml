@@ -250,11 +250,11 @@ struct
                     val connected = LearnerSet.fromList (compute_connected (l, m))
                     val m_unburied = MsgMap.lookup (info_unburied, m)
                     val m_sender = Msg.sender m
-                    fun doit x =
+                    fun pred x =
                         Msg.Acceptor.eq ((Msg.sender x), m_sender) andalso
                         LearnerSet.member (connected, valOf (Msg.learner x))
                 in
-                    MsgSet.filter doit m_unburied
+                    MsgSet.filter pred m_unburied
                 end
             fun is_fresh (l : learner, m : msg) = (* TODO cache the results *)
                 let
@@ -269,7 +269,7 @@ struct
                 end
             val m_tran =
                 let
-                    fun p x =
+                    fun pred x =
                         let val m_lrn = valOf (Msg.learner m) in
                             Msg.is_one_b x andalso is_fresh (m_lrn, x)
                         end
@@ -281,7 +281,7 @@ struct
                             Msg.Ballot.eq (bal, m_bal)
                         end
                 in
-                    MsgUtil.tran m p cont
+                    MsgUtil.tran m pred cont
                 end
             fun senders ms =
                 let fun helper (x, accu) = AcceptorSet.add' (Msg.sender x, accu) in
