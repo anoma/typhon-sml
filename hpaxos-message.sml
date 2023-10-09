@@ -73,4 +73,19 @@ struct
         in
             doit (SOME m1)
         end
+
+    (* DFS *)
+    fun tran m (p : Msg.t -> bool) (cont : Msg.t -> bool) =
+        let
+            fun doit accu nil = accu
+              | doit accu (x :: tl) =
+                if cont x then
+                    let val queue = (Msg.get_refs x) @ tl in
+                        doit (if p x then x :: accu else accu) queue
+                    end
+                else
+                    doit accu tl
+        in
+            doit [] [m]
+        end
 end
