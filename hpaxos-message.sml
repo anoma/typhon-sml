@@ -65,7 +65,7 @@ end
 
 functor MessageUtil (Msg : HPAXOS_MESSAGE) =
 struct
-    (* TODO can be optimized *)
+    (* checks if m2 is in transitive closure of prev for m1 *)
     fun is_prev_reachable (m1, m2) =
         let fun doit NONE = false
               | doit (SOME m) =
