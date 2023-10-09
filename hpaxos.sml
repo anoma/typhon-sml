@@ -18,6 +18,7 @@ struct
     type msg = Msg.t
 
     type acceptor_id = word
+    type acceptor = Msg.Acceptor.t
     type ballot = Msg.Ballot.t
     type value = Msg.Value.t
     type learner = Msg.Learner.t
@@ -77,9 +78,9 @@ struct
     (* learner graph *)
     datatype graph = Graph of learner_graph
 
-    datatype acceptor = Acc of acceptor_id * graph * state * msg_info * cache
+    datatype acceptor_node = Acc of acceptor_id * graph * state * msg_info * cache
 
-    type t = acceptor
+    type t = acceptor_node
     type node_id = acceptor_id
 
     fun is_known (m : msg) (State (KnownMsgs k, r)) : bool =
@@ -230,7 +231,7 @@ struct
                   (InfoBalVal info_bal_val)
                   (InfoAccStatus info_acc_status)
                   (InfoUnburied info_unburied)
-        : AcceptorSet.set =
+        : acceptor list =
         let
             fun compute_connected (l : learner, m : msg) =
                 let val caught =
@@ -281,7 +282,7 @@ struct
                     List.foldl helper AcceptorSet.empty ms
                 end
         in
-            senders m_tran
+            AcceptorSet.foldr (op ::) [] (senders m_tran)
         end
 
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
