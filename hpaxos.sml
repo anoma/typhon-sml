@@ -148,7 +148,7 @@ struct
                 let fun to_list (best1, NONE) = [best1]
                       | to_list (best1, SOME best2) = [best1, best2]
                 in
-                    valOf (pick_best_two_from_list (List.concat [to_list a, to_list b]))
+                    valOf (pick_best_two_from_list (to_list a @ to_list b))
                 end
             fun helper (r, w) =
                 let val r_w = MsgMap.lookup (info_w, r)
