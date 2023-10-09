@@ -14,6 +14,7 @@ signature HPAXOS_BALLOT =
 sig
     type t
     val zero : t (* the smallest ballot *)
+    val eq : t * t -> bool
     val compare : t * t -> order
 end
 
