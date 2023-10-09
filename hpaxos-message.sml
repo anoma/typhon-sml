@@ -81,16 +81,20 @@ struct
         let
             fun doit accu visited [] = accu
               | doit accu visited (x :: tl) =
-                if not (MsgSet.member (visited, x)) andalso cont x then
-                    let
-                        val accu' = if pred x then x :: accu else accu
-                        val visited' = MsgSet.add (visited, x)
-                        val queue' = (Msg.get_refs x) @ tl
-                    in
-                        doit accu' visited' queue'
-                    end
-                else
+                if MsgSet.member (visited, x) then
                     doit accu visited tl
+                else
+                    let val visited' = MsgSet.add (visited, x) in
+                        if cont x then
+                            let
+                                val accu' = if pred x then x :: accu else accu
+                                val queue' = (Msg.get_refs x) @ tl
+                            in
+                                doit accu' visited' queue'
+                            end
+                        else
+                            doit accu visited' tl
+                    end
         in
             doit [] MsgSet.empty [m]
         end
