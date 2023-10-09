@@ -65,6 +65,8 @@ end
 
 functor MessageUtil (Msg : HPAXOS_MESSAGE) =
 struct
+    structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
+
     (* checks if m2 is in transitive closure of prev for m1 *)
     fun is_prev_reachable (m1, m2) =
         let fun doit NONE = false
@@ -75,20 +77,21 @@ struct
         end
 
     (* DFS *)
-    fun tran m (pred : Msg.t -> bool) (cont : Msg.t -> bool) =
+    fun tran m pred cont =
         let
-            fun doit accu [] = accu
-              | doit accu (x :: tl) =
-                if cont x then
+            fun doit accu visited [] = accu
+              | doit accu visited (x :: tl) =
+                if not (MsgSet.member (visited, x)) andalso cont x then
                     let
                         val accu' = if pred x then x :: accu else accu
-                        val queue = (Msg.get_refs x) @ tl
+                        val visited' = MsgSet.add (visited, x)
+                        val queue' = (Msg.get_refs x) @ tl
                     in
-                        doit accu' queue
+                        doit accu' visited' queue'
                     end
                 else
-                    doit accu tl
+                    doit accu visited tl
         in
-            doit [] [m]
+            doit [] MsgSet.empty [m]
         end
 end
