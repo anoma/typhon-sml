@@ -132,12 +132,15 @@ struct
                                     in
                                         SOME new_snd_best
                                     end
-                            val (b, v) = MsgMap.lookup (info_bal_val, x)
-                            val (bal1, val1) = MsgMap.lookup (info_bal_val, best1)
                             val new_best =
-                                case Msg.Ballot.compare (b, bal1) of
-                                    GREATER => (x, pick_second_best v best1 (bal1, val1) o_best2)
-                                  | _ => (best1, pick_second_best val1 x (b, v) o_best2)
+                                let 
+                                    val (b, v) = MsgMap.lookup (info_bal_val, x)
+                                    val (bal1, val1) = MsgMap.lookup (info_bal_val, best1)
+                                in
+                                    case Msg.Ballot.compare (b, bal1) of
+                                        GREATER => (x, pick_second_best v best1 (bal1, val1) o_best2)
+                                      | _ => (best1, pick_second_best val1 x (b, v) o_best2)
+                                end
                         in
                             SOME new_best
                         end
@@ -151,8 +154,7 @@ struct
                     valOf (pick_best_two_from_list (to_list a @ to_list b))
                 end
             fun helper (r, w) =
-                let val r_w = MsgMap.lookup (info_w, r)
-                in
+                let val r_w = MsgMap.lookup (info_w, r) in
                     LearnerAcceptorMap.unionWith pick_best_two (r_w, w)
                 end
             val w0 =
@@ -265,13 +267,17 @@ struct
                 in
                     MsgSet.all pred connected_2as
                 end
-            val m_lrn = valOf (Msg.learner m)
-            val (m_bal, _) = MsgMap.lookup (info_bal_val, m)
             val m_tran =
                 let
-                    fun p x = Msg.is_one_b x andalso is_fresh (m_lrn, x)
+                    fun p x =
+                        let val m_lrn = valOf (Msg.learner m) in
+                            Msg.is_one_b x andalso is_fresh (m_lrn, x)
+                        end
                     fun cont x =
-                        let val (bal, _) = MsgMap.lookup (info_bal_val, x) in
+                        let
+                            val (m_bal, _) = MsgMap.lookup (info_bal_val, m)
+                            val (bal, _) = MsgMap.lookup (info_bal_val, x)
+                        in
                             Msg.Ballot.eq (bal, m_bal)
                         end
                 in
