@@ -18,5 +18,5 @@ sig
     val all_acceptors : t -> acceptor list
 
     val is_quorum : t -> learner * acceptor list -> bool
-    val connected : t -> learner * acceptor list -> learner list
+    val get_connected : t -> learner * acceptor list -> learner list
 end

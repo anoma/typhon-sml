@@ -243,7 +243,7 @@ struct
                                 (MsgMap.lookup (info_acc_status, m))
                         )
                 in
-                    LearnerGraph.connected g (l, caught)
+                    LearnerGraph.get_connected g (l, caught)
                 end
             fun compute_connected_2as (l : learner, m : msg) =
                 let
