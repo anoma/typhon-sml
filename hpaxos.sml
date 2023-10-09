@@ -20,13 +20,17 @@ struct
     type acceptor_id = word
     type ballot = Msg.Ballot.t
     type value = Msg.Value.t
+    type learner = Msg.Learner.t
     type learner_graph = LearnerGraph.t
 
     structure MsgUtil = MessageUtil (Msg)
 
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
     structure MsgMap : ORD_MAP = RedBlackMapFn (MessageOrdKey (Msg))
+    structure AcceptorSet : ORD_SET = RedBlackSetFn (AcceptorOrdKey (Msg.Acceptor))
     structure AcceptorMap : ORD_MAP = RedBlackMapFn (AcceptorOrdKey (Msg.Acceptor))
+    structure LearnerSet : ORD_SET = RedBlackSetFn (LearnerOrdKey (Msg.Learner))
+
     structure LearnerAcceptorMap : ORD_MAP =
         RedBlackMapFn (
             ProdLexOrdKey
@@ -46,6 +50,9 @@ struct
                         | Uncaught of msg
         type t = status
 
+        fun is_uncaught (Uncaught _) = true
+          | is_uncaught _ = false
+
         fun join (Uncaught m1, Uncaught m2) =
             if MsgUtil.is_prev_reachable (m1, m2) then
                 Uncaught m1
@@ -60,7 +67,9 @@ struct
     datatype info_W = InfoW of ((msg * msg option) LearnerAcceptorMap.map) MsgMap.map
     datatype info_acc_status = InfoAccStatus of (AcceptorStatus.t AcceptorMap.map) MsgMap.map
     datatype info_unburied_2as = InfoUnburied of MsgSet.set MsgMap.map
-    datatype msg_info = MsgInfo of info_bal_val * info_W * info_acc_status * info_unburied_2as
+    datatype info_q = InfoQ of MsgSet.set MsgMap.map
+    datatype msg_info =
+             MsgInfo of info_bal_val * info_W * info_acc_status * info_unburied_2as * info_q
 
     (* memo state *)
     datatype cache = Cache of int
@@ -216,6 +225,65 @@ struct
             MsgSet.filter (not o buried) u
         end
 
+    fun compute_q (m : msg)
+                  (g : learner_graph)
+                  (InfoBalVal info_bal_val)
+                  (InfoAccStatus info_acc_status)
+                  (InfoUnburied info_unburied)
+        : AcceptorSet.set =
+        let
+            fun compute_connected (l : learner, m : msg) =
+                let val caught =
+                        AcceptorMap.listKeys (
+                            AcceptorMap.filter
+                                AcceptorStatus.is_uncaught
+                                (MsgMap.lookup (info_acc_status, m))
+                        )
+                in
+                    LearnerGraph.connected g (l, caught)
+                end
+            fun compute_connected_2as (l : learner, m : msg) =
+                let
+                    val connected = LearnerSet.fromList (compute_connected (l, m))
+                    val m_unburied = MsgMap.lookup (info_unburied, m)
+                    val m_sender = Msg.sender m
+                    fun doit x =
+                        Msg.Acceptor.eq ((Msg.sender x), m_sender) andalso
+                        LearnerSet.member (connected, valOf (Msg.learner x))
+                in
+                    MsgSet.filter doit m_unburied
+                end
+            fun is_fresh (l : learner, m : msg) = (* TODO cache the results *)
+                let
+                    val (m_bal, _) = MsgMap.lookup (info_bal_val, m)
+                    val connected_2as  = compute_connected_2as (l, m)
+                    fun pred x =
+                        let val (bal, _) = MsgMap.lookup (info_bal_val, x) in
+                            Msg.Ballot.eq (bal, m_bal)
+                        end
+                in
+                    MsgSet.all pred connected_2as
+                end
+            val m_lrn = valOf (Msg.learner m)
+            val (m_bal, _) = MsgMap.lookup (info_bal_val, m)
+            val m_tran =
+                let
+                    fun p x = Msg.is_one_b x andalso is_fresh (m_lrn, x)
+                    fun cont x =
+                        let val (bal, _) = MsgMap.lookup (info_bal_val, x) in
+                            Msg.Ballot.eq (bal, m_bal)
+                        end
+                in
+                    MsgUtil.tran m p cont
+                end
+            fun senders ms =
+                let fun helper (x, accu) = AcceptorSet.add' (Msg.sender x, accu) in
+                    List.foldl helper AcceptorSet.empty ms
+                end
+        in
+            senders m_tran
+        end
+
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
         Acc (id,
              Graph g,
@@ -224,6 +292,7 @@ struct
              MsgInfo (InfoBalVal MsgMap.empty,
                       InfoW MsgMap.empty,
                       InfoAccStatus MsgMap.empty,
-                      InfoUnburied MsgMap.empty),
+                      InfoUnburied MsgMap.empty,
+                      InfoQ MsgMap.empty),
              Cache 0)
 end
