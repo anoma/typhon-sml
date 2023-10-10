@@ -68,14 +68,36 @@ struct
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
 
     (* checks if m2 is in transitive closure of prev for m1 *)
-    fun is_prev_reachable (m1, m2) =
+    structure PrevTran :>
+              sig
+                  val is_prev_reachable : Msg.t * Msg.t -> bool
+                  val is_prev_reachable' : (Msg.t -> Msg.Ballot.t) -> Msg.t * Msg.t -> bool
+              end =
+    struct
+    fun is_prev_reachable_aux cont (m1, m2) =
         let fun doit NONE = false
               | doit (SOME m) =
-                Msg.eq (m, m2) orelse doit (Msg.get_prev m)
+                cont m andalso (Msg.eq (m, m2) orelse doit (Msg.get_prev m))
         in
             doit (SOME m1)
         end
 
+    fun is_prev_reachable (x, y) =
+        is_prev_reachable_aux (fn z => true) (x, y)
+
+    fun is_prev_reachable' bal (x, y) =
+        let
+            val y_bal = bal y
+            fun cont z =
+                case Msg.Ballot.compare (bal z, y_bal) of
+                    LESS => false
+                  | _ => true
+        in
+            is_prev_reachable_aux cont (x, y)
+        end
+    end (* PrevTran *)
+
+    (* compute transitive references of the message *)
     fun tran pred cont m =
         let
             fun doit accu visited [] = accu
