@@ -1,3 +1,9 @@
+fun id x = x
+
+fun fst (x, _) = x
+fun snd (_, x) = x
+fun swap (x, y) = (y, x)
+
 functor ProdLexOrdKey (A : ORD_KEY)
                       (B : ORD_KEY)
         : ORD_KEY =
