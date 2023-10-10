@@ -281,7 +281,7 @@ struct
                             Msg.Ballot.eq (bal, m_bal)
                         end
                 in
-                    MsgUtil.tran m pred cont
+                    MsgUtil.tran pred cont m
                 end
             fun senders ms =
                 let fun helper (x, accu) = AcceptorSet.add' (Msg.sender x, accu) in

@@ -76,8 +76,7 @@ struct
             doit (SOME m1)
         end
 
-    (* DFS *)
-    fun tran m pred cont =
+    fun tran pred cont m =
         let
             fun doit accu visited [] = accu
               | doit accu visited (x :: tl) =
