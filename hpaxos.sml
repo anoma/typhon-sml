@@ -54,15 +54,15 @@ struct
         fun is_uncaught (Uncaught _) = true
           | is_uncaught _ = false
 
-        fun join (Uncaught m1, Uncaught m2) =
-            if MsgUtil.is_prev_reachable (m1, m2) then
+        fun join (bal : msg -> ballot) (Uncaught m1, Uncaught m2) =
+            if MsgUtil.PrevTran.is_prev_reachable' bal (m1, m2) then
                 Uncaught m1
-            else if MsgUtil.is_prev_reachable (m2, m1) then
+            else if MsgUtil.PrevTran.is_prev_reachable' bal (m2, m1) then
                 Uncaught m2
             else
                 Caught
-          | join (_, _) = Caught
-    end
+          | join bal (_, _) = Caught
+    end (* AcceptorStatus *)
 
     datatype info_bal_val = InfoBalVal of (ballot * value) MsgMap.map
     datatype info_W = InfoW of ((msg * msg option) LearnerAcceptorMap.map) MsgMap.map
@@ -169,13 +169,18 @@ struct
             List.foldl helper w0 (Msg.get_refs m)
         end
 
-    fun compute_acceptor_status (m : msg) (InfoAccStatus info_acc_status)
+    fun compute_acceptor_status (m : msg)
+                                (InfoBalVal info_bal_val)
+                                (InfoAccStatus info_acc_status)
         : AcceptorStatus.t AcceptorMap.map =
         (* assume: m is not 1a *)
         let
             fun helper (r, s) =
-                let val r_acc_status = MsgMap.lookup (info_acc_status, r) in
-                    AcceptorMap.unionWith AcceptorStatus.join (r_acc_status, s)
+                let
+                    val r_acc_status = MsgMap.lookup (info_acc_status, r)
+                    fun bal x = fst (MsgMap.lookup (info_bal_val, x))
+                in
+                    AcceptorMap.unionWith (AcceptorStatus.join bal) (r_acc_status, s)
                 end
             val s0 =
                 if not (Msg.is_one_a m) then
