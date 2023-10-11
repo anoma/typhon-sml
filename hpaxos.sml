@@ -1,7 +1,3 @@
-use "hpaxos-message.sml";
-use "learner-graph.sml";
-use "util.sml";
-
 signature HPAXOS_NODE =
 sig
     type t

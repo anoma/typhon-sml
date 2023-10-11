@@ -1,6 +1,3 @@
-use "epoch.sml";
-use "learner.sml";
-
 signature LEARNER_GRAPH =
 sig
     type t

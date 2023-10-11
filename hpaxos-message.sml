@@ -1,8 +1,5 @@
 (* HPaxos Message *)
 
-use "learner.sml";
-use "hpaxos-acceptor.sml";
-
 signature HPAXOS_VALUE =
 sig
     type t
