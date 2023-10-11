@@ -129,7 +129,7 @@ struct
                                         SOME new_snd_best
                                     end
                             val new_best =
-                                let 
+                                let
                                     val (b, v) = MsgMap.lookup (info_bal_val, x)
                                     val (bal1, val1) = MsgMap.lookup (info_bal_val, best1)
                                 in
