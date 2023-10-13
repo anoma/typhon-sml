@@ -72,7 +72,7 @@ struct
     fun does_reference_1a m : bool =
         isSome (List.find Msg.is_one_a (Msg.get_refs m))
 
-    fun refs_unique m : bool =
+    fun refs_nondup m : bool =
         let
             fun check_unique (_, (refs, false)) = (refs, false)
               | check_unique (x, (refs, true)) =

@@ -313,7 +313,7 @@ struct
         (* ASSUMES: \forall x \in m.refs. x \in dom(info_bal_val) *)
         prev_correct m andalso
         (* optionally, we might want to check that every reference occurs at most once *)
-        MsgUtil.refs_unique m andalso
+        MsgUtil.refs_nondup m andalso
         case Msg.typ m of
             Msg.OneA =>
             not (isSome (Msg.get_prev m)) andalso
