@@ -286,11 +286,51 @@ struct
                 end
             fun senders ms =
                 let fun helper (x, accu) = AcceptorSet.add' (Msg.sender x, accu) in
-                    List.foldl helper AcceptorSet.empty ms
+                    foldl helper AcceptorSet.empty ms
                 end
         in
             AcceptorSet.foldr (op ::) [] (senders m_tran)
         end
+
+    fun prev_correct (m : msg) : bool =
+        let
+            val m_refs = Msg.get_refs m
+            val m_acc = Msg.sender m
+            fun from_this_sender x = Msg.Acceptor.eq ((Msg.sender x), m_acc)
+        in
+            case Msg.get_prev m of
+                NONE => List.all (not o from_this_sender) m_refs
+              | SOME prev =>
+                isSome (List.find (curry Msg.eq prev) m_refs) andalso
+                let fun check_ref x =
+                        not (from_this_sender x) orelse Msg.eq (x, prev)
+                in
+                    List.all check_ref m_refs
+                end
+        end
+
+    fun is_wellformed (m : msg) (m_bal : ballot) (InfoBalVal info_bal_val) : bool =
+        (* ASSUMES: \forall x \in m.refs. x \in dom(info_bal_val) *)
+        prev_correct m andalso
+        (* optionally, we might want to check that every reference occurs at most once *)
+        MsgUtil.refs_unique m andalso
+        case Msg.typ m of
+            Msg.OneA =>
+            not (isSome (Msg.get_prev m)) andalso
+            (* TODO this might be redundant depending on how `get_refs` is defined *)
+            null (Msg.get_refs m)
+          | Msg.OneB =>
+            MsgUtil.does_reference_1a m andalso
+            let fun check_ref x =
+                    Msg.is_one_a x orelse
+                    case MsgMap.lookup (info_bal_val, x) of
+                        (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
+            in
+                List.all check_ref (Msg.get_refs m)
+            end
+          | Msg.TwoA =>
+            not (null (Msg.get_refs m)) andalso
+            false (* TODO check q *)
 
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
         Acc (id,
