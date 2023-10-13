@@ -101,7 +101,7 @@ struct
                     end
                 val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
             in
-                List.foldl helper (Msg.Ballot.zero, Msg.Value.default) refs
+                foldl helper (Msg.Ballot.zero, Msg.Value.default) refs
             end
 
     fun compute_W (m : msg) (InfoBalVal info_bal_val) (InfoW info_w)
@@ -141,7 +141,7 @@ struct
                             SOME new_best
                         end
                 in
-                    List.foldl picker NONE ms
+                    foldl picker NONE ms
                 end
             fun pick_best_two (a : msg * msg option, b : msg * msg option) =
                 let fun to_list (best1, NONE) = [best1]
@@ -162,7 +162,7 @@ struct
                 else
                     LearnerAcceptorMap.empty
         in
-            List.foldl helper w0 (Msg.get_refs m)
+            foldl helper w0 (Msg.get_refs m)
         end
 
     fun compute_acceptor_status (m : msg)
@@ -184,7 +184,7 @@ struct
                 else
                     AcceptorMap.empty
         in
-            List.foldl helper s0 (Msg.get_refs m)
+            foldl helper s0 (Msg.get_refs m)
         end
 
     fun compute_unburied_2as (m : msg)
@@ -210,7 +210,7 @@ struct
             val u0 = if Msg.is_two_a m then MsgSet.singleton m else MsgSet.empty
             fun doit (r, u) =
                 MsgSet.union (u, MsgMap.lookup (info_unburied, r))
-            val u = List.foldl doit u0 (Msg.get_refs m)
+            val u = foldl doit u0 (Msg.get_refs m)
             val m_w = MsgMap.lookup (info_w, m)
             val all_acceptors = LearnerGraph.all_acceptors g
             fun buried x =
