@@ -18,6 +18,9 @@ end
 signature HPAXOS_MESSAGE =
 sig
     type t
+    datatype typ = OneA
+                 | OneB
+                 | TwoA
 
     structure Value : HPAXOS_VALUE
     type value = Value.t
@@ -33,6 +36,8 @@ sig
 
     val hash : t -> word
     val eq : t * t -> bool
+
+    val typ : t -> typ
 
     val is_one_a : t -> bool
     val is_one_b : t -> bool
@@ -63,6 +68,21 @@ end
 functor MessageUtil (Msg : HPAXOS_MESSAGE) =
 struct
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
+
+    fun does_reference_1a m : bool =
+        isSome (List.find Msg.is_one_a (Msg.get_refs m))
+
+    fun refs_unique m : bool =
+        let
+            fun check_unique (_, (refs, false)) = (refs, false)
+              | check_unique (x, (refs, true)) =
+                if MsgSet.member (refs, x) then
+                    (refs, false)
+                else
+                    (MsgSet.add (refs, x), true)
+        in
+            #2 (foldl check_unique (MsgSet.empty, true) (Msg.get_refs m))
+        end
 
     (* checks if m2 is in transitive closure of prev for m1 *)
     structure PrevTran :>
