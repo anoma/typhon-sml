@@ -3,6 +3,7 @@ fun id x = x
 fun fst (x, _) = x
 fun snd (_, x) = x
 fun swap (x, y) = (y, x)
+fun curry f x y = f (x, y)
 
 functor ProdLexOrdKey (A : ORD_KEY)
                       (B : ORD_KEY)
