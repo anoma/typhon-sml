@@ -92,11 +92,11 @@ struct
               end =
     struct
     fun is_prev_reachable_aux cont (m1, m2) =
-        let fun doit NONE = false
-              | doit (SOME m) =
-                cont m andalso (Msg.eq (m, m2) orelse doit (Msg.get_prev m))
+        let fun loop NONE = false
+              | loop (SOME m) =
+                cont m andalso (Msg.eq (m, m2) orelse loop (Msg.get_prev m))
         in
-            doit (SOME m1)
+            loop (SOME m1)
         end
 
     fun is_prev_reachable (x, y) =
@@ -117,10 +117,10 @@ struct
     (* compute transitive references of the message *)
     fun tran pred cont m =
         let
-            fun doit accu visited [] = accu
-              | doit accu visited (x :: tl) =
+            fun loop accu visited [] = accu
+              | loop accu visited (x :: tl) =
                 if MsgSet.member (visited, x) then
-                    doit accu visited tl
+                    loop accu visited tl
                 else
                     let val visited' = MsgSet.add (visited, x) in
                         if cont x then
@@ -128,12 +128,12 @@ struct
                                 val accu' = if pred x then x :: accu else accu
                                 val queue' = (Msg.get_refs x) @ tl
                             in
-                                doit accu' visited' queue'
+                                loop accu' visited' queue'
                             end
                         else
-                            doit accu visited' tl
+                            loop accu visited' tl
                     end
         in
-            doit [] MsgSet.empty [m]
+            loop [] MsgSet.empty [m]
         end
 end
