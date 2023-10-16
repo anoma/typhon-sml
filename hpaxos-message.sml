@@ -72,6 +72,16 @@ struct
     fun does_reference_1a m : bool =
         isSome (List.find Msg.is_one_a (Msg.get_refs m))
 
+    fun references_at_most_one_1a m : bool =
+        let fun check (x, (found, false)) = (found, false)
+              | check (x, (false, true)) =
+                if Msg.is_one_a x then (true, true) else (false, true)
+              | check (x, (true, true)) =
+                if Msg.is_one_a x then (true, false) else (true, true)
+        in
+            #2 (foldl check (false, true) (Msg.get_refs m))
+        end
+
     fun refs_nondup m : bool =
         let
             fun check_unique (_, (refs, false)) = (refs, false)
