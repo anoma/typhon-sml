@@ -141,9 +141,17 @@ struct
         fun add_recent (State (s, i, c)) (m : msg) =
             State (AlgoState.add_recent s m, i, c)
 
-        fun get_bal_val (State (s, i, c)) = MessageInfo.get_bal_val i
-    end
+        fun get_bal_val (State (s, i, c)) m =
+            if Msg.is_one_a m then
+                valOf (Msg.get_bal_val m)
+            else
+                MessageInfo.get_bal_val i m
 
+        fun get_W (State (s, i, c)) = MessageInfo.get_W i
+        fun get_acc_status (State (s, i, c)) = MessageInfo.get_acc_status i
+        fun get_unburied_2as (State (s, i, c)) = MessageInfo.get_unburied_2as i
+        fun get_q (State (s, i, c)) = MessageInfo.get_q i
+    end
 
     (* learner graph *)
     datatype graph = Graph of learner_graph
