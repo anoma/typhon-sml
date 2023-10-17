@@ -3,7 +3,8 @@ sig
     type t
     type node_id
     type learner_graph
-    val hpaxos_node : node_id -> learner_graph -> t
+    type mailbox
+    val hpaxos_node : node_id -> learner_graph -> mailbox -> t
 end
 
 functor HPaxos (structure Msg : HPAXOS_MESSAGE
@@ -12,6 +13,7 @@ functor HPaxos (structure Msg : HPAXOS_MESSAGE
                     and Msg.Acceptor = LearnerGraph.Acceptor) :> HPAXOS_NODE =
 struct
     type msg = Msg.t
+    type mailbox = int
 
     type acceptor_id = word
     type acceptor = Msg.Acceptor.t
@@ -142,7 +144,7 @@ struct
     (* learner graph *)
     datatype graph = Graph of learner_graph
 
-    datatype acceptor_node = Acc of acceptor_id * graph * State.t
+    datatype acceptor_node = Acc of acceptor_id * graph * State.t * mailbox
 
     type t = acceptor_node
     type node_id = acceptor_id
@@ -371,6 +373,6 @@ struct
             not (null (Msg.get_refs m)) andalso
             false (* TODO check q *)
 
-    fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
-        Acc (id, Graph g, State.init())
+    fun hpaxos_node (id : node_id) (g : LearnerGraph.t) (inbox : mailbox) : t =
+        Acc (id, Graph g, State.init(), inbox)
 end
