@@ -350,18 +350,20 @@ struct
                 end
         end
 
+    (* ASSUME: every direct reference is known *)
     fun is_wellformed (sigma : State.t) (m : msg) (m_bal : ballot) : bool =
-        (* ASSUME: \forall x \in m.refs. x \in dom(info_bal_val) *)
         prev_correct m andalso
         (* optionally, we might want to check that every reference occurs at most once *)
         MsgUtil.refs_nondup m andalso
         case Msg.typ m of
             Msg.OneA =>
+            (* TODO this check might be redundant depending on how `get_prev` is defined *)
             not (isSome (Msg.get_prev m)) andalso
-            (* TODO this might be redundant depending on how `get_refs` is defined *)
+            (* TODO this check might be redundant depending on how `get_refs` is defined *)
             null (Msg.get_refs m)
           | Msg.OneB =>
-            MsgUtil.does_reference_1a m andalso
+            (* MsgUtil.does_reference_1a m andalso *)
+            MsgUtil.references_exactly_one_1a m andalso
             let fun check_ref x =
                     Msg.is_one_a x orelse
                     case State.get_bal_val sigma x of
