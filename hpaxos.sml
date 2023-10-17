@@ -35,10 +35,26 @@ struct
                 (AcceptorOrdKey (Msg.Acceptor)))
 
     (* algorithm state *)
-    datatype known_msgs = KnownMsgs of MsgSet.set
-    datatype recent_msgs = RecentMsgs of MsgSet.set
+    structure AlgoState =
+    struct
+        datatype known_msgs = KnownMsgs of MsgSet.set
+        datatype recent_msgs = RecentMsgs of MsgSet.set
 
-    datatype state = State of known_msgs * recent_msgs
+        datatype state = AlgoState of known_msgs * recent_msgs
+        type t = state
+
+        fun init () = AlgoState (KnownMsgs MsgSet.empty, RecentMsgs MsgSet.empty)
+
+        fun is_known (AlgoState (KnownMsgs k, _)) = curry MsgSet.member k
+
+        fun is_recent (AlgoState (_, RecentMsgs r)) = curry MsgSet.member r
+
+        fun add_known (AlgoState (KnownMsgs k, r)) (m : msg) : state =
+            AlgoState (KnownMsgs (MsgSet.add (k, m)), r)
+
+        fun add_recent (AlgoState (k, RecentMsgs r)) (m : msg) : state =
+            AlgoState (k, RecentMsgs (MsgSet.add (r, m)))
+    end
 
     (* message info state *)
     structure AcceptorStatus =
@@ -60,51 +76,96 @@ struct
           | join bal (_, _) = Caught
     end (* AcceptorStatus *)
 
-    datatype info_bal_val = InfoBalVal of (ballot * value) MsgMap.map
-    datatype info_W = InfoW of ((msg * msg option) LearnerAcceptorMap.map) MsgMap.map
-    datatype info_acc_status = InfoAccStatus of (AcceptorStatus.t AcceptorMap.map) MsgMap.map
-    datatype info_unburied_2as = InfoUnburied of MsgSet.set MsgMap.map
-    datatype info_q = InfoQ of MsgSet.set MsgMap.map
-    datatype msg_info =
-             MsgInfo of info_bal_val * info_W * info_acc_status * info_unburied_2as * info_q
+    structure MessageInfo =
+    struct
+        datatype info_bal_val = InfoBalVal of (ballot * value)
+        datatype info_W = InfoW of (msg * msg option) LearnerAcceptorMap.map
+        datatype info_acc_status = InfoAccStatus of AcceptorStatus.t AcceptorMap.map
+        datatype info_unburied_2as = InfoUnburied of MsgSet.set
+        datatype info_q = InfoQ of MsgSet.set
+
+        datatype msg_info =
+                 MsgInfo of (info_bal_val * info_W * info_acc_status * info_unburied_2as * info_q) MsgMap.map
+        type t = msg_info
+
+        fun init () = MsgInfo MsgMap.empty
+        fun get_bal_val (MsgInfo info) m =
+            case MsgMap.lookup (info, m) of
+                (InfoBalVal bv, _, _, _, _) => bv
+
+        fun get_W (MsgInfo info) m =
+            case MsgMap.lookup (info, m) of
+                (_, InfoW w, _, _, _) => w
+
+        fun get_acc_status (MsgInfo info) m =
+            case MsgMap.lookup (info, m) of
+                (_, _, InfoAccStatus s, _, _) => s
+
+        fun get_unburied_2as (MsgInfo info) m =
+            case MsgMap.lookup (info, m) of
+                (_, _, _, InfoUnburied u, _) => u
+
+        fun get_q (MsgInfo info) m =
+            case MsgMap.lookup (info, m) of
+                (_, _, _, _, InfoQ q) => q
+    end
 
     (* memo state *)
-    datatype cache = Cache of int
+    structure Cache =
+    struct
+        datatype cache = Cache of int
+        type t = cache
+
+        fun init () = Cache 0
+    end
+
+    structure State =
+    struct
+        datatype state = State of AlgoState.t * MessageInfo.t * Cache.t
+        type t = state
+
+        fun init () = State (AlgoState.init (), MessageInfo.init (), Cache.init ())
+
+        fun is_known (State (s, _, _)) = AlgoState.is_known s
+        fun is_recent (State (s, _, _)) = AlgoState.is_recent s
+
+        fun add_known (State (s, i, c)) (m : msg) =
+            State (AlgoState.add_known s m, i, c)
+
+        fun add_recent (State (s, i, c)) (m : msg) =
+            State (AlgoState.add_recent s m, i, c)
+
+        fun get_bal_val (State (s, i, c)) = MessageInfo.get_bal_val i
+    end
+
 
     (* learner graph *)
     datatype graph = Graph of learner_graph
 
-    datatype acceptor_node = Acc of acceptor_id * graph * state * msg_info * cache
+    datatype acceptor_node = Acc of acceptor_id * graph * State.t
 
     type t = acceptor_node
     type node_id = acceptor_id
 
-    fun is_known (m : msg) (State (KnownMsgs k, r)) : bool =
-        MsgSet.member (k, m)
+    (* [msg_to_bal_val] returns a pair (ballot, value) for each known message, including 1a messages *)
+    (* ASSUME: m is not 1a *)
+    fun compute_bal_val (m : msg) msg_to_bal_val : ballot * value =
+        let
+            fun helper (x, (max_bal, max_val)) =
+                let val (b, v) = msg_to_bal_val x in
+                    case Msg.Ballot.compare (b, max_bal) of
+                        LESS => (max_bal, max_val)
+                      | _ => (b, v)
+                end
+            val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
+        in
+            foldl helper (Msg.Ballot.zero, Msg.Value.default) refs
+        end
 
-    fun add_known (m : msg) (State (KnownMsgs k, r)) : state =
-        State (KnownMsgs (MsgSet.add (k, m)), r)
-
-    fun add_recent (m : msg) (State (k, RecentMsgs r)) : state =
-        State (k, RecentMsgs (MsgSet.add (r, m)))
-
-    fun compute_bal_val (m : msg) (InfoBalVal info_bal_val) : ballot * value =
-        if Msg.is_one_a m then
-            valOf (Msg.get_bal_val m)
-        else
-            let
-                fun helper (x, (max_bal, max_val)) =
-                    let val (b, v) = MsgMap.lookup (info_bal_val, x) in
-                        case Msg.Ballot.compare (b, max_bal) of
-                            LESS => (max_bal, max_val)
-                          | _ => (b, v)
-                    end
-                val refs = Msg.get_refs m (* refs is non-empty since m is not 1a *)
-            in
-                foldl helper (Msg.Ballot.zero, Msg.Value.default) refs
-            end
-
-    fun compute_W (m : msg) (InfoBalVal info_bal_val) (InfoW info_w)
+    (* [msg_to_bal_val] returns a pair (ballot, value) for each known message and the message m *)
+    (* [msg_to_w] returns a (msg * msg option) LearnerAcceptorMap.map for each known message, excluding 1a *)
+    (* ASSUME: m is not 1a *)
+    fun compute_W (m : msg) msg_to_bal_val msg_to_w
         : (msg * msg option) LearnerAcceptorMap.map =
         let
             fun pick_best_two_from_list (ms : msg list) : (msg * msg option) option =
@@ -120,7 +181,7 @@ struct
                                             case cur_snd_best_option of
                                                 NONE => candidate
                                               | SOME cur_snd_best =>
-                                                let val (bal2, _) = MsgMap.lookup (info_bal_val, cur_snd_best) in
+                                                let val (bal2, _) = msg_to_bal_val cur_snd_best in
                                                     case Msg.Ballot.compare (candidate_bal, bal2) of
                                                         GREATER => candidate
                                                       | _ => cur_snd_best
@@ -130,8 +191,8 @@ struct
                                     end
                             val new_best =
                                 let
-                                    val (b, v) = MsgMap.lookup (info_bal_val, x)
-                                    val (bal1, val1) = MsgMap.lookup (info_bal_val, best1)
+                                    val (b, v) = msg_to_bal_val x
+                                    val (bal1, val1) = msg_to_bal_val best1
                                 in
                                     case Msg.Ballot.compare (b, bal1) of
                                         GREATER => (x, pick_second_best v best1 (bal1, val1) o_best2)
@@ -149,10 +210,7 @@ struct
                 in
                     valOf (pick_best_two_from_list (to_list a @ to_list b))
                 end
-            fun helper (r, w) =
-                let val r_w = MsgMap.lookup (info_w, r) in
-                    LearnerAcceptorMap.unionWith pick_best_two (r_w, w)
-                end
+            fun helper (r, w) = LearnerAcceptorMap.unionWith pick_best_two (msg_to_w r, w)
             val w0 =
                 if Msg.is_two_a m then
                     LearnerAcceptorMap.insert
@@ -161,66 +219,56 @@ struct
                          (m, NONE))
                 else
                     LearnerAcceptorMap.empty
+            val refs = List.filter (not o Msg.is_one_a) (Msg.get_refs m)
         in
-            foldl helper w0 (Msg.get_refs m)
+            foldl helper w0 refs
         end
 
-    fun compute_acceptor_status (m : msg)
-                                (InfoBalVal info_bal_val)
-                                (InfoAccStatus info_acc_status)
+    (* [msg_to_bal] returns a ballot for each known message, excluding 1a, and the message m *)
+    (* [msg_to_acc_status] returns a map (AcceptorStatus.t AcceptorMap.map) for each known message, excluding 1a *)
+    (* ASSUME: m is not 1a *)
+    fun compute_acceptor_status (m : msg) msg_to_bal msg_to_acc_status
         : AcceptorStatus.t AcceptorMap.map =
-        (* assume: m is not 1a *)
         let
             fun helper (r, s) =
-                let
-                    val r_acc_status = MsgMap.lookup (info_acc_status, r)
-                    fun bal x = fst (MsgMap.lookup (info_bal_val, x))
-                in
-                    AcceptorMap.unionWith (AcceptorStatus.join bal) (r_acc_status, s)
-                end
-            val s0 =
-                if not (Msg.is_one_a m) then
-                    AcceptorMap.singleton (Msg.sender m, AcceptorStatus.Uncaught m)
-                else
-                    AcceptorMap.empty
+                AcceptorMap.unionWith (AcceptorStatus.join msg_to_bal) (msg_to_acc_status r, s)
+            val s0 = AcceptorMap.singleton (Msg.sender m, AcceptorStatus.Uncaught m)
+            val refs = List.filter (not o Msg.is_one_a) (Msg.get_refs m)
         in
-            foldl helper s0 (Msg.get_refs m)
+            foldl helper s0 refs
         end
 
-    fun compute_unburied_2as (m : msg)
-                             (Graph g)
-                             (InfoBalVal info_bal_val)
-                             (InfoW info_w)
-                             (InfoUnburied info_unburied)
+    (* [msg_to_bal_val] returns a pair (ballot, value) for each known message and the message m *)
+    (* [msg_to_w] returns a (msg * msg option) LearnerAcceptorMap.map for each known message, excluding 1a *)
+    (* [msg_to_unburied] returns a set MsgSet.set for each known message, excluding 1a *)
+    (* ASSUME: m is not 1a *)
+    fun compute_unburied_2as (m : msg) (g : learner_graph) msg_to_bal_val msg_to_w msg_to_unburied
         : MsgSet.set =
         let
             val m_lrn = valOf (Msg.learner m)
             (* z is burying x *)
             fun burying (x, z) =
-                Msg.is_two_a z andalso (* TODO check if redundant *)
                 Msg.Learner.eq
                     (valOf (Msg.learner x), valOf (Msg.learner z)) andalso
                 let
-                    val (x_bal, x_val) = MsgMap.lookup (info_bal_val, x)
-                    val (z_bal, z_val) = MsgMap.lookup (info_bal_val, z)
+                    val (x_bal, x_val) = msg_to_bal_val x
+                    val (z_bal, z_val) = msg_to_bal_val z
                 in
                     Msg.Ballot.compare (x_bal, z_bal) = LESS andalso
                     not (Msg.Value.eq (x_val, z_val))
                 end
             val u0 = if Msg.is_two_a m then MsgSet.singleton m else MsgSet.empty
-            fun doit (r, u) =
-                MsgSet.union (u, MsgMap.lookup (info_unburied, r))
-            val u = foldl doit u0 (Msg.get_refs m)
-            val m_w = MsgMap.lookup (info_w, m)
+            val refs = List.filter (not o Msg.is_one_a) (Msg.get_refs m)
+            val u = foldl (fn (r, u) => MsgSet.union (msg_to_unburied r, u)) u0 refs
+            val m_w = msg_to_w m
             val all_acceptors = LearnerGraph.all_acceptors g
             fun buried x =
                 let
                     val x_lrn = valOf (Msg.learner x)
                     fun doit acc =
-                        let val (best1, o_best2) = LearnerAcceptorMap.lookup (m_w, (x_lrn, acc)) in
-                            burying (x, best1) orelse
-                            (isSome o_best2 andalso burying (x, (valOf o_best2)))
-                        end
+                        case LearnerAcceptorMap.lookup (m_w, (x_lrn, acc)) of
+                            (best1, o_best2) =>
+                            burying (x, best1) orelse (isSome o_best2 andalso burying (x, (valOf o_best2)))
                     val acceptors = List.filter doit all_acceptors
                 in
                     LearnerGraph.is_quorum g (m_lrn, acceptors)
@@ -229,58 +277,48 @@ struct
             MsgSet.filter (not o buried) u
         end
 
-    fun compute_q (m : msg)
-                  (g : learner_graph)
-                  (InfoBalVal info_bal_val)
-                  (InfoAccStatus info_acc_status)
-                  (InfoUnburied info_unburied)
+    (* [msg_to_bal] returns a ballot for each known message, excluding 1a, and the message m *)
+    (* [msg_to_acc_status] returns a map (AcceptorStatus.t AcceptorMap.map) for each known message, excluding 1a *)
+    (* [msg_to_unburied] returns a set MsgSet.set for each known message, excluding 1a *)
+    (* ASSUME: m is 2a *)
+    fun compute_q (m : msg) (g : learner_graph) msg_to_bal msg_to_acc_status msg_to_unburied
         : acceptor list =
         let
             fun compute_connected (l : learner, m : msg) =
+                (* ASSUME: m is 1b *)
                 let val caught =
                         AcceptorMap.listKeys (
-                            AcceptorMap.filter
-                                AcceptorStatus.is_uncaught
-                                (MsgMap.lookup (info_acc_status, m))
+                            AcceptorMap.filter AcceptorStatus.is_uncaught (msg_to_acc_status m)
                         )
                 in
                     LearnerGraph.get_connected g (l, caught)
                 end
             fun compute_connected_2as (l : learner, m : msg) =
+                (* ASSUME: m is 1b *)
                 let
                     val connected = LearnerSet.fromList (compute_connected (l, m))
-                    val m_unburied = MsgMap.lookup (info_unburied, m)
                     val m_sender = Msg.sender m
                     fun pred x =
                         Msg.Acceptor.eq ((Msg.sender x), m_sender) andalso
                         LearnerSet.member (connected, valOf (Msg.learner x))
                 in
-                    MsgSet.filter pred m_unburied
+                    MsgSet.filter pred (msg_to_unburied m)
                 end
             fun is_fresh (l : learner, m : msg) = (* TODO cache the results *)
+                (* ASSUME: m is 1b *)
                 let
-                    val (m_bal, _) = MsgMap.lookup (info_bal_val, m)
                     val connected_2as  = compute_connected_2as (l, m)
-                    fun pred x =
-                        let val (bal, _) = MsgMap.lookup (info_bal_val, x) in
-                            Msg.Ballot.eq (bal, m_bal)
-                        end
+                    val m_bal = msg_to_bal m
+                    fun from_this_sender x = Msg.Ballot.eq (msg_to_bal x, m_bal)
                 in
-                    MsgSet.all pred connected_2as
+                    MsgSet.all from_this_sender connected_2as
                 end
             val m_tran =
                 let
-                    fun pred x =
-                        let val m_lrn = valOf (Msg.learner m) in
-                            Msg.is_one_b x andalso is_fresh (m_lrn, x)
-                        end
-                    fun cont x =
-                        let
-                            val (m_bal, _) = MsgMap.lookup (info_bal_val, m)
-                            val (bal, _) = MsgMap.lookup (info_bal_val, x)
-                        in
-                            Msg.Ballot.eq (bal, m_bal)
-                        end
+                    val m_lrn = valOf (Msg.learner m)
+                    val m_bal = msg_to_bal m
+                    fun pred x = Msg.is_one_b x andalso is_fresh (m_lrn, x)
+                    fun cont x = Msg.Ballot.eq (msg_to_bal x, m_bal)
                 in
                     MsgUtil.tran pred cont m
                 end
@@ -294,12 +332,13 @@ struct
 
     fun prev_correct (m : msg) : bool =
         let
-            val m_refs = Msg.get_refs m
+            val m_refs = List.filter (not o Msg.is_one_a) (Msg.get_refs m)
             val m_acc = Msg.sender m
             fun from_this_sender x = Msg.Acceptor.eq ((Msg.sender x), m_acc)
         in
             case Msg.get_prev m of
-                NONE => List.all (not o from_this_sender) m_refs
+                NONE =>
+                List.all (not o from_this_sender) m_refs
               | SOME prev =>
                 isSome (List.find (curry Msg.eq prev) m_refs) andalso
                 let fun check_ref x =
@@ -309,8 +348,8 @@ struct
                 end
         end
 
-    fun is_wellformed (m : msg) (m_bal : ballot) (InfoBalVal info_bal_val) : bool =
-        (* ASSUMES: \forall x \in m.refs. x \in dom(info_bal_val) *)
+    fun is_wellformed (sigma : State.t) (m : msg) (m_bal : ballot) : bool =
+        (* ASSUME: \forall x \in m.refs. x \in dom(info_bal_val) *)
         prev_correct m andalso
         (* optionally, we might want to check that every reference occurs at most once *)
         MsgUtil.refs_nondup m andalso
@@ -323,7 +362,7 @@ struct
             MsgUtil.does_reference_1a m andalso
             let fun check_ref x =
                     Msg.is_one_a x orelse
-                    case MsgMap.lookup (info_bal_val, x) of
+                    case State.get_bal_val sigma x of
                         (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
             in
                 List.all check_ref (Msg.get_refs m)
@@ -333,14 +372,5 @@ struct
             false (* TODO check q *)
 
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) : t =
-        Acc (id,
-             Graph g,
-             State (KnownMsgs MsgSet.empty,
-                    RecentMsgs MsgSet.empty),
-             MsgInfo (InfoBalVal MsgMap.empty,
-                      InfoW MsgMap.empty,
-                      InfoAccStatus MsgMap.empty,
-                      InfoUnburied MsgMap.empty,
-                      InfoQ MsgMap.empty),
-             Cache 0)
+        Acc (id, Graph g, State.init())
 end
