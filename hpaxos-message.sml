@@ -69,17 +69,19 @@ functor MessageUtil (Msg : HPAXOS_MESSAGE) =
 struct
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
 
+    (* TODO remove if not used *)
     fun does_reference_1a m : bool =
         isSome (List.find Msg.is_one_a (Msg.get_refs m))
 
-    fun references_at_most_one_1a m : bool =
+    fun references_exactly_one_1a m : bool =
         let fun check (x, (found, false)) = (found, false)
               | check (x, (false, true)) =
                 if Msg.is_one_a x then (true, true) else (false, true)
               | check (x, (true, true)) =
                 if Msg.is_one_a x then (true, false) else (true, true)
         in
-            #2 (foldl check (false, true) (Msg.get_refs m))
+            case foldl check (false, true) (Msg.get_refs m) of
+                (found, no_second) => found andalso no_second
         end
 
     fun refs_nondup m : bool =
