@@ -41,6 +41,7 @@ struct
     struct
         datatype known_msgs = KnownMsgs of MsgSet.set
         datatype recent_msgs = RecentMsgs of MsgSet.set
+        datatype queued_msg = QueuedMsg of msg
 
         datatype state = AlgoState of known_msgs * recent_msgs
         type t = state
