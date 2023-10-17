@@ -46,7 +46,7 @@ struct
         datatype state = AlgoState of known_msgs * recent_msgs
         type t = state
 
-        fun init () = AlgoState (KnownMsgs MsgSet.empty, RecentMsgs MsgSet.empty)
+        fun mk () = AlgoState (KnownMsgs MsgSet.empty, RecentMsgs MsgSet.empty)
 
         fun is_known (AlgoState (KnownMsgs k, _)) = curry MsgSet.member k
 
@@ -92,7 +92,8 @@ struct
 
         type t = msg_info
 
-        fun init () = MsgInfo MsgMap.empty
+        fun mk () = MsgInfo MsgMap.empty
+
         fun mk_info_all (bv, w, s, u, q) =
             (InfoBalVal bv, InfoW w, InfoAccStatus s, InfoUnburied u, InfoQ q)
 
@@ -123,7 +124,7 @@ struct
         datatype cache = Cache of int
         type t = cache
 
-        fun init () = Cache 0
+        fun mk () = Cache 0
     end
 
     structure State =
@@ -131,7 +132,7 @@ struct
         datatype state = State of AlgoState.t * MessageInfo.t * Cache.t
         type t = state
 
-        fun init () = State (AlgoState.init (), MessageInfo.init (), Cache.init ())
+        fun mk () = State (AlgoState.mk (), MessageInfo.mk (), Cache.mk ())
 
         fun is_known (State (s, _, _)) = AlgoState.is_known s
         fun is_recent (State (s, _, _)) = AlgoState.is_recent s
@@ -148,10 +149,10 @@ struct
             else
                 MessageInfo.get_bal_val i m
 
-        fun get_W (State (s, i, c)) = MessageInfo.get_W i
-        fun get_acc_status (State (s, i, c)) = MessageInfo.get_acc_status i
-        fun get_unburied_2as (State (s, i, c)) = MessageInfo.get_unburied_2as i
-        fun get_q (State (s, i, c)) = MessageInfo.get_q i
+        fun get_W (State (_, i, _)) = MessageInfo.get_W i
+        fun get_acc_status (State (_, i, _)) = MessageInfo.get_acc_status i
+        fun get_unburied_2as (State (_, i, _)) = MessageInfo.get_unburied_2as i
+        fun get_q (State (_, i, _)) = MessageInfo.get_q i
     end
 
     (* learner graph *)
@@ -434,5 +435,5 @@ struct
         end
 
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) (inbox : mailbox) : t =
-        Acc (id, Graph g, State.init(), inbox)
+        Acc (id, Graph g, State.mk (), inbox)
 end
