@@ -84,7 +84,7 @@ struct
         datatype info_W = InfoW of (msg * msg option) LearnerAcceptorMap.map
         datatype info_acc_status = InfoAccStatus of AcceptorStatus.t AcceptorMap.map
         datatype info_unburied_2as = InfoUnburied of MsgSet.set
-        datatype info_q = InfoQ of MsgSet.set
+        datatype info_q = InfoQ of acceptor list
 
         type info_all = info_bal_val * info_W * info_acc_status * info_unburied_2as * info_q
         datatype msg_info = MsgInfo of info_all MsgMap.map
