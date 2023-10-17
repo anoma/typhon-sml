@@ -363,7 +363,7 @@ struct
         end
 
     (* ASSUME: every direct reference is known *)
-    fun is_wellformed (sigma : State.t) (m : msg) (m_bal : ballot) : bool * MessageInfo.info_all option =
+    fun is_wellformed (sigma : State.t) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
         let fun is_wellformed_1a m =
                 let val passed =
                         (* TODO this check might be redundant depending on how `get_prev` is defined *)
@@ -374,25 +374,52 @@ struct
                     (passed, NONE)
                 end
             fun is_wellformed_1b m =
-                let val passed =
-                        (* MsgUtil.does_reference_1a m andalso *)
+                let
+                    val get_bal_val = State.get_bal_val sigma
+                    val (m_bal, m_val) = compute_bal_val m get_bal_val
+                    val passed =
                         MsgUtil.references_exactly_one_1a m andalso
                         let fun check_ref x =
                                 Msg.is_one_a x orelse
-                                case State.get_bal_val sigma x of
+                                case get_bal_val x of
                                     (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
                         in
                             List.all check_ref (Msg.get_refs m)
                         end
                 in
-                    (passed, NONE)
+                    if passed then
+                        (* TODO *)
+                        (passed, NONE)
+                    else
+                        (passed, NONE)
                 end
             fun is_wellformed_2a m =
-                let val passed =
+                let
+                    val get_bal_val = State.get_bal_val sigma
+                    val get_W = State.get_W sigma
+                    val get_acc_status = State.get_acc_status sigma
+                    val get_unburied = State.get_unburied_2as sigma
+                    val m_bal_val = compute_bal_val m get_bal_val
+                    fun get_bal_val_with_m x =
+                        if Msg.eq (x, m) then m_bal_val else get_bal_val x
+                    val m_W =
+                        compute_W m get_bal_val_with_m get_W
+                    val m_acc_status =
+                        compute_acceptor_status m (fst o get_bal_val_with_m) get_acc_status
+                    val m_unburied =
+                        compute_unburied_2as m g get_bal_val_with_m get_W get_unburied
+                    val m_q =
+                        compute_q m g (fst o get_bal_val_with_m) get_acc_status get_unburied
+                    val passed =
                         not (null (Msg.get_refs m)) andalso
-                        false (* TODO check q *)
+                        LearnerGraph.is_quorum g (valOf (Msg.learner m), m_q)
+                    val info =
+                        if passed then
+                            SOME (MessageInfo.mk_info_all (m_bal_val, m_W, m_acc_status, m_unburied, m_q))
+                        else
+                            NONE
                 in
-                    (passed, NONE)
+                    (passed, info)
                 end
         in
             if prev_correct m andalso
