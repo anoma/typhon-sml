@@ -86,8 +86,9 @@ struct
         datatype info_unburied_2as = InfoUnburied of MsgSet.set
         datatype info_q = InfoQ of MsgSet.set
 
-        datatype msg_info =
-                 MsgInfo of (info_bal_val * info_W * info_acc_status * info_unburied_2as * info_q) MsgMap.map
+        type info_all = info_bal_val * info_W * info_acc_status * info_unburied_2as * info_q
+        datatype msg_info = MsgInfo of info_all MsgMap.map
+
         type t = msg_info
 
         fun init () = MsgInfo MsgMap.empty
@@ -351,29 +352,47 @@ struct
         end
 
     (* ASSUME: every direct reference is known *)
-    fun is_wellformed (sigma : State.t) (m : msg) (m_bal : ballot) : bool =
-        prev_correct m andalso
-        (* optionally, we might want to check that every reference occurs at most once *)
-        MsgUtil.refs_nondup m andalso
-        case Msg.typ m of
-            Msg.OneA =>
-            (* TODO this check might be redundant depending on how `get_prev` is defined *)
-            not (isSome (Msg.get_prev m)) andalso
-            (* TODO this check might be redundant depending on how `get_refs` is defined *)
-            null (Msg.get_refs m)
-          | Msg.OneB =>
-            (* MsgUtil.does_reference_1a m andalso *)
-            MsgUtil.references_exactly_one_1a m andalso
-            let fun check_ref x =
-                    Msg.is_one_a x orelse
-                    case State.get_bal_val sigma x of
-                        (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
-            in
-                List.all check_ref (Msg.get_refs m)
-            end
-          | Msg.TwoA =>
-            not (null (Msg.get_refs m)) andalso
-            false (* TODO check q *)
+    fun is_wellformed (sigma : State.t) (m : msg) (m_bal : ballot) : bool * MessageInfo.info_all option =
+        let fun is_wellformed_1a m =
+                let val passed =
+                        (* TODO this check might be redundant depending on how `get_prev` is defined *)
+                        not (isSome (Msg.get_prev m)) andalso
+                        (* TODO this check might be redundant depending on how `get_refs` is defined *)
+                        null (Msg.get_refs m)
+                in
+                    (passed, NONE)
+                end
+            fun is_wellformed_1b m =
+                let val passed =
+                        (* MsgUtil.does_reference_1a m andalso *)
+                        MsgUtil.references_exactly_one_1a m andalso
+                        let fun check_ref x =
+                                Msg.is_one_a x orelse
+                                case State.get_bal_val sigma x of
+                                    (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
+                        in
+                            List.all check_ref (Msg.get_refs m)
+                        end
+                in
+                    (passed, NONE)
+                end
+            fun is_wellformed_2a m =
+                let val passed =
+                        not (null (Msg.get_refs m)) andalso
+                        false (* TODO check q *)
+                in
+                    (passed, NONE)
+                end
+        in
+            if prev_correct m andalso
+               (* optionally, we might want to check that every reference occurs at most once *)
+               MsgUtil.refs_nondup m then
+                case Msg.typ m of
+                    Msg.OneA => is_wellformed_1a m
+                  | Msg.OneB => is_wellformed_1b m
+                  | Msg.TwoA => is_wellformed_2a m
+            else (false, NONE)
+        end
 
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) (inbox : mailbox) : t =
         Acc (id, Graph g, State.init(), inbox)
