@@ -92,6 +92,9 @@ struct
         type t = msg_info
 
         fun init () = MsgInfo MsgMap.empty
+        fun mk_info_all (bv, w, s, u, q) =
+            (InfoBalVal bv, InfoW w, InfoAccStatus s, InfoUnburied u, InfoQ q)
+
         fun get_bal_val (MsgInfo info) m =
             case MsgMap.lookup (info, m) of
                 (InfoBalVal bv, _, _, _, _) => bv
