@@ -346,7 +346,7 @@ struct
             AcceptorSet.foldr (op ::) [] (senders m_tran)
         end
 
-    fun prev_correct (m : msg) : bool =
+    fun prev_wellformed (m : msg) : bool =
         let
             val m_refs = List.filter (not o Msg.is_one_a) (Msg.get_refs m)
             val m_acc = Msg.sender m
