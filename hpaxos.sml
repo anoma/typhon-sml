@@ -8,9 +8,11 @@ sig
 end
 
 functor HPaxos (structure Msg : HPAXOS_MESSAGE
+                structure Mailbox : HPAXOS_MAILBOX
                 structure LearnerGraph : LEARNER_GRAPH
                 sharing Msg.Learner = LearnerGraph.Learner
-                    and Msg.Acceptor = LearnerGraph.Acceptor) :> HPAXOS_NODE =
+                    and Msg.Acceptor = LearnerGraph.Acceptor
+                    and Mailbox.Message = Msg) :> HPAXOS_NODE =
 struct
     type msg = Msg.t
     type mailbox = int
