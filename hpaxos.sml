@@ -5,6 +5,7 @@ sig
     type learner_graph
     type mailbox
     val hpaxos_node : node_id -> learner_graph -> mailbox -> t
+    val run : t -> unit
 end
 
 functor HPaxos (structure Msg : HPAXOS_MESSAGE
@@ -438,4 +439,9 @@ struct
 
     fun hpaxos_node (id : node_id) (g : LearnerGraph.t) (inbox : mailbox) : t =
         Acc (id, Graph g, State.mk (), inbox)
+
+    fun run (node : t) =
+        let fun loop () = loop () in
+            loop ()
+        end
 end
