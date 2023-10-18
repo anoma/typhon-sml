@@ -364,9 +364,36 @@ struct
                 end
         end
 
+    fun all_refs_known (sigma : State.t) (m : msg) =
+        List.all (State.is_known sigma) (Msg.get_refs m)
+
     (* ASSUME: every direct reference is known *)
     fun is_wellformed (sigma : State.t) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
-        let fun is_wellformed_1a m =
+        let
+            fun compute_msg_info_all m =
+                (* ASSUME: m is not 1a *)
+                let
+                    val get_bal_val = State.get_bal_val sigma
+                    val get_W = State.get_W sigma
+                    val get_acc_status = State.get_acc_status sigma
+                    val get_unburied_2as = State.get_unburied_2as sigma
+                    val m_bal_val = compute_bal_val m get_bal_val
+                    fun get_bal_val_with_m x =
+                        if Msg.eq (x, m) then m_bal_val else get_bal_val x
+                    val m_W =
+                        compute_W m get_bal_val_with_m get_W
+                    val m_acc_status =
+                        compute_acceptor_status m (fst o get_bal_val_with_m) get_acc_status
+                    val m_unburied_2as =
+                        compute_unburied_2as m g get_bal_val_with_m get_W get_unburied_2as
+                    val m_q =
+                        if Msg.is_one_b m then [] else
+                        (* case 2a *)
+                        compute_q m g (fst o get_bal_val_with_m) get_acc_status get_unburied_2as
+                in
+                    (m_bal_val, m_W, m_acc_status, m_unburied_2as, m_q)
+                end
+            fun is_wellformed_1a m =
                 let val passed =
                         (* TODO this check might be redundant depending on how `get_prev` is defined *)
                         not (isSome (Msg.get_prev m)) andalso
@@ -375,62 +402,33 @@ struct
                 in
                     (passed, NONE)
                 end
-            fun is_wellformed_1b m =
+            fun is_wellformed_1b m ((m_bal, _), _, _, _, _) =
+                MsgUtil.references_exactly_one_1a m andalso
                 let
                     val get_bal_val = State.get_bal_val sigma
-                    val (m_bal, m_val) = compute_bal_val m get_bal_val
-                    val passed =
-                        MsgUtil.references_exactly_one_1a m andalso
-                        let fun check_ref x =
-                                Msg.is_one_a x orelse
-                                case get_bal_val x of
-                                    (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
-                        in
-                            List.all check_ref (Msg.get_refs m)
-                        end
+                    fun check_ref x =
+                        Msg.is_one_a x orelse
+                        case get_bal_val x of
+                            (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
                 in
-                    if passed then
-                        (* TODO *)
-                        (passed, NONE)
-                    else
-                        (passed, NONE)
+                    List.all check_ref (Msg.get_refs m)
                 end
-            fun is_wellformed_2a m =
-                let
-                    val get_bal_val = State.get_bal_val sigma
-                    val get_W = State.get_W sigma
-                    val get_acc_status = State.get_acc_status sigma
-                    val get_unburied = State.get_unburied_2as sigma
-                    val m_bal_val = compute_bal_val m get_bal_val
-                    fun get_bal_val_with_m x =
-                        if Msg.eq (x, m) then m_bal_val else get_bal_val x
-                    val m_W =
-                        compute_W m get_bal_val_with_m get_W
-                    val m_acc_status =
-                        compute_acceptor_status m (fst o get_bal_val_with_m) get_acc_status
-                    val m_unburied =
-                        compute_unburied_2as m g get_bal_val_with_m get_W get_unburied
-                    val m_q =
-                        compute_q m g (fst o get_bal_val_with_m) get_acc_status get_unburied
-                    val passed =
-                        not (null (Msg.get_refs m)) andalso
-                        LearnerGraph.is_quorum g (valOf (Msg.learner m), m_q)
-                    val info =
-                        if passed then
-                            SOME (MessageInfo.mk_info_all (m_bal_val, m_W, m_acc_status, m_unburied, m_q))
-                        else
-                            NONE
-                in
-                    (passed, info)
-                end
+            fun is_wellformed_2a m (_, _, _, _, m_q) =
+                not (null (Msg.get_refs m)) andalso
+                LearnerGraph.is_quorum g (valOf (Msg.learner m), m_q)
         in
-            if prev_correct m andalso
-               (* optionally, we might want to check that every reference occurs at most once *)
-               MsgUtil.refs_nondup m then
+            (* optionally, we might want to check that every reference occurs at most once (call to refs_nondup) *)
+            if prev_wellformed m andalso MsgUtil.refs_nondup m then
                 case Msg.typ m of
-                    Msg.OneA => is_wellformed_1a m
-                  | Msg.OneB => is_wellformed_1b m
-                  | Msg.TwoA => is_wellformed_2a m
+                    Msg.OneA => (is_wellformed_1a m, NONE)
+                  | Msg.OneB =>
+                    let val m_info = compute_msg_info_all m in
+                        if is_wellformed_1b m m_info then (true, SOME m_info) else (false, NONE)
+                    end
+                  | Msg.TwoA =>
+                    let val m_info = compute_msg_info_all m in
+                        if is_wellformed_2a m m_info then (true, SOME m_info) else (false, NONE)
+                    end
             else (false, NONE)
         end
 
