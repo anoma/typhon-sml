@@ -6,6 +6,7 @@ hpaxos-acceptor.sml
 learner.sml
 learner-graph.sml
 hpaxos-message.sml
+hpaxos-mailbox.sml
 hpaxos.sml
 $/basis.cm
 $/smlnj-lib.cm
