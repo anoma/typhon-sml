@@ -391,18 +391,14 @@ struct
                         (* case 2a *)
                         compute_q m g (fst o get_bal_val_with_m) get_acc_status get_unburied_2as
                 in
-                    (m_bal_val, m_W, m_acc_status, m_unburied_2as, m_q)
+                    MessageInfo.mk_info_all (m_bal_val, m_W, m_acc_status, m_unburied_2as, m_q)
                 end
             fun is_wellformed_1a m =
-                let val passed =
-                        (* TODO this check might be redundant depending on how `get_prev` is defined *)
-                        not (isSome (Msg.get_prev m)) andalso
-                        (* TODO this check might be redundant depending on how `get_refs` is defined *)
-                        null (Msg.get_refs m)
-                in
-                    (passed, NONE)
-                end
-            fun is_wellformed_1b m ((m_bal, _), _, _, _, _) =
+                (* TODO this check might be redundant depending on how `get_prev` is defined *)
+                not (isSome (Msg.get_prev m)) andalso
+                (* TODO this check might be redundant depending on how `get_refs` is defined *)
+                null (Msg.get_refs m)
+            fun is_wellformed_1b m (MessageInfo.InfoBalVal (m_bal, _), _, _, _, _) =
                 MsgUtil.references_exactly_one_1a m andalso
                 let
                     val get_bal_val = State.get_bal_val sigma
@@ -413,7 +409,7 @@ struct
                 in
                     List.all check_ref (Msg.get_refs m)
                 end
-            fun is_wellformed_2a m (_, _, _, _, m_q) =
+            fun is_wellformed_2a m (_, _, _, _, MessageInfo.InfoQ m_q) =
                 not (null (Msg.get_refs m)) andalso
                 LearnerGraph.is_quorum g (valOf (Msg.learner m), m_q)
         in
@@ -422,12 +418,18 @@ struct
                 case Msg.typ m of
                     Msg.OneA => (is_wellformed_1a m, NONE)
                   | Msg.OneB =>
-                    let val m_info = compute_msg_info_all m in
-                        if is_wellformed_1b m m_info then (true, SOME m_info) else (false, NONE)
+                    let val m_info_all = compute_msg_info_all m in
+                        if is_wellformed_1b m m_info_all then
+                            (true, SOME m_info_all)
+                        else
+                            (false, NONE)
                     end
                   | Msg.TwoA =>
-                    let val m_info = compute_msg_info_all m in
-                        if is_wellformed_2a m m_info then (true, SOME m_info) else (false, NONE)
+                    let val m_info_all = compute_msg_info_all m in
+                        if is_wellformed_2a m m_info_all then
+                            (true, SOME m_info_all)
+                        else
+                            (false, NONE)
                     end
             else (false, NONE)
         end
