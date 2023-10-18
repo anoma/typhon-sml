@@ -15,7 +15,7 @@ functor HPaxos (structure Msg : HPAXOS_MESSAGE
                     and Mailbox.Message = Msg) :> HPAXOS_NODE =
 struct
     type msg = Msg.t
-    type mailbox = int
+    type mailbox = Mailbox.t
 
     type acceptor_id = word
     type acceptor = Msg.Acceptor.t
