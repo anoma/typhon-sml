@@ -13,7 +13,8 @@ functor HPaxos (structure Msg : HPAXOS_MESSAGE
                 structure LearnerGraph : LEARNER_GRAPH
                 sharing Msg.Learner = LearnerGraph.Learner
                     and Msg.Acceptor = LearnerGraph.Acceptor
-                    and Mailbox.Message = Msg) :> HPAXOS_NODE =
+                    and Mailbox.Message = Msg)
+        :> HPAXOS_NODE =
 struct
     type msg = Msg.t
     type mailbox = Mailbox.t
@@ -158,10 +159,12 @@ struct
         fun get_q (State (_, i, _)) = MessageInfo.get_q i
     end
 
+    type state = State.t
+
     (* learner graph *)
     datatype graph = Graph of learner_graph
 
-    datatype acceptor_node = Acc of acceptor_id * graph * State.t * mailbox
+    datatype acceptor_node = Acc of acceptor_id * graph * state * mailbox
 
     type t = acceptor_node
     type node_id = acceptor_id
@@ -367,24 +370,23 @@ struct
                 end
         end
 
-    fun all_refs_known (sigma : State.t) (m : msg) =
-        List.all (State.is_known sigma) (Msg.get_refs m)
+    fun all_refs_known (s : state) (m : msg) =
+        List.all (State.is_known s) (Msg.get_refs m)
 
     (* ASSUME: every direct reference is known *)
-    fun is_wellformed (sigma : State.t) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
+    fun is_wellformed (s : state) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
         let
             fun compute_msg_info_all m =
                 (* ASSUME: m is not 1a *)
                 let
-                    val get_bal_val = State.get_bal_val sigma
-                    val get_W = State.get_W sigma
-                    val get_acc_status = State.get_acc_status sigma
-                    val get_unburied_2as = State.get_unburied_2as sigma
+                    val get_bal_val = State.get_bal_val s
+                    val get_W = State.get_W s
+                    val get_acc_status = State.get_acc_status s
+                    val get_unburied_2as = State.get_unburied_2as s
                     val m_bal_val = compute_bal_val m get_bal_val
                     fun get_bal_val_with_m x =
                         if Msg.eq (x, m) then m_bal_val else get_bal_val x
-                    val m_W =
-                        compute_W m get_bal_val_with_m get_W
+                    val m_W = compute_W m get_bal_val_with_m get_W
                     val m_acc_status =
                         compute_acceptor_status m (fst o get_bal_val_with_m) get_acc_status
                     val m_unburied_2as =
@@ -404,7 +406,7 @@ struct
             fun is_wellformed_1b m (MessageInfo.InfoBalVal (m_bal, _), _, _, _, _) =
                 MsgUtil.references_exactly_one_1a m andalso
                 let
-                    val get_bal_val = State.get_bal_val sigma
+                    val get_bal_val = State.get_bal_val s
                     fun check_ref x =
                         Msg.is_one_a x orelse
                         case get_bal_val x of
