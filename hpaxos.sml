@@ -414,6 +414,13 @@ struct
     fun all_refs_known (s : state) (m : msg) =
         List.all (State.is_known s) (Msg.get_refs m)
 
+    fun has_non_wellformed_ref s m =
+        List.exists (State.is_non_wellformed s) (Msg.get_refs m)
+
+    fun process_non_wellformed s m =
+        State.add_non_wellformed s m
+        (* ...further actions possible *)
+
     (* ASSUME: every direct reference is known *)
     fun is_wellformed (s : state) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
         let
