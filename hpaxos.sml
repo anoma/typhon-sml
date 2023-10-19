@@ -530,15 +530,15 @@ struct
                     val recent = MsgSet.foldr (op ::) [] (State.get_recent s)
                     val new_1b = Msg.mk_one_b (prev, recent)
                 in
-                    case check_wellformed_and_update_info s g new_1b of
-                        (false, s) => s
-                      | (true, s) =>
-                        let
-                            val s = State.clear_recent s
-                            val s = State.set_prev s new_1b
-                        in
-                            State.set_queued s new_1b
-                        end
+                    let val (wf, s) = check_wellformed_and_update_info s g new_1b in
+                        if wf then
+                            let val s = State.clear_recent s
+                                val s = State.set_prev s new_1b
+                            in
+                                State.set_queued s new_1b
+                            end
+                        else s
+                    end
                 end
             fun process_1b s m : state =
                 s
