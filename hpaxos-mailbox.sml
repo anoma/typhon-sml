@@ -3,6 +3,6 @@ sig
     type t
     structure Message : HPAXOS_MESSAGE
 
-    val recv : t -> Message.t
+    val recv : t -> Message.t option
     val broadcast : t -> Message.t -> unit
 end
