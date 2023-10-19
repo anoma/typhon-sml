@@ -487,11 +487,55 @@ struct
             else (false, NONE)
         end
 
-    fun hpaxos_node (id : node_id) (g : LearnerGraph.t) (inbox : mailbox) : t =
-        Acc (id, Graph g, State.mk (), inbox)
+    fun check_wellformed_and_update_info (s : state) (g : learner_graph) m : bool * state =
+        case is_wellformed s g m of
+            (false, _) => (false, s)
+          | (true, NONE) => (true, s)
+          | (true, SOME info_entry) =>
+            (true, State.store_info_entry s (m, info_entry))
 
-    fun run (node : t) =
-        let fun loop () = loop () in
-            loop ()
+    fun hpaxos_node (id : node_id) (g : learner_graph) (mbox : mailbox) : t =
+        Acc (id, Graph g, State.mk (), mbox)
+
+    fun run (Acc (id, Graph g, s, mbox)) =
+        let
+            fun get_next_wellformed_msg s : msg * state =
+                case State.pop_queued s of
+                    (SOME m, s) => (m, s)
+                  | (NONE, s) =>
+                    case Mailbox.recv mbox of
+                        SOME m =>
+                        if has_non_wellformed_ref s m then
+                            get_next_wellformed_msg (process_non_wellformed s m)
+                        else
+                            let val (res, s) = check_wellformed_and_update_info s g m in
+                                if res then (m, s) else
+                                get_next_wellformed_msg (process_non_wellformed s m)
+                            end
+                      | NONE => get_next_wellformed_msg s
+            fun process_1a s m : state =
+                s
+            fun process_1b s m : state =
+                s
+            fun process_2a s m : state =
+                s
+            fun loop s =
+                let val (m, s) = get_next_wellformed_msg s in
+                    if State.is_known s m then
+                        loop s
+                    else
+                        let
+                            val _ = Mailbox.broadcast mbox m
+                            val s = State.add_known s m
+                            val s = State.add_recent s m
+                        in
+                            case Msg.typ m of
+                                Msg.OneA => (case process_1a s m of s => loop s)
+                              | Msg.OneB => (case process_1b s m of s => loop s)
+                              | Msg.TwoA => (case process_2a s m of s => loop s)
+                        end
+                end
+        in
+            loop s
         end
 end
