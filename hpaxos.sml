@@ -59,15 +59,21 @@ struct
                                NonWellformedMsgs MsgSet.empty)
 
         fun is_known (AlgoState (KnownMsgs k, _, _, _, _)) = curry MsgSet.member k
-        fun is_recent (AlgoState (_, RecentMsgs r, _, _, _)) = curry MsgSet.member r
+
+        fun get_recent (AlgoState (_, RecentMsgs r, _, _, _)) = r
+        fun clear_recent (AlgoState (k, _, p, q, nw)) =
+            AlgoState (k, RecentMsgs MsgSet.empty, p, q, nw)
 
         fun get_prev (AlgoState (_, _, PrevMsg p, _, _)) = p
-
+        fun set_prev (AlgoState (k, r, _, q, nw)) m =
+            AlgoState (k, r, PrevMsg (SOME m), q, nw)
         fun clear_prev (AlgoState (k, r, _, q, nw)) =
             AlgoState (k, r, PrevMsg NONE, q, nw)
 
         fun pop_queued (AlgoState (k, r, p, QueuedMsg q, nw)) =
             (q, AlgoState (k, r, p, QueuedMsg NONE, nw))
+        fun set_queued (AlgoState (k, r, p, _, nw)) m =
+            AlgoState (k, r, p, QueuedMsg (SOME m), nw)
 
         fun is_non_wellformed (AlgoState (_, _, _, _, NonWellformedMsgs nw)) =
             curry MsgSet.member nw
@@ -161,15 +167,20 @@ struct
         fun mk () = State (AlgoState.mk (), MessageInfo.mk (), Cache.mk ())
 
         fun is_known (State (s, _, _)) = AlgoState.is_known s
-        fun is_recent (State (s, _, _)) = AlgoState.is_recent s
+
+        fun get_recent (State (s, _, _)) = AlgoState.get_recent s
+        fun clear_recent (State (s, i, c)) = State (AlgoState.clear_recent s, i, c)
 
         fun get_prev (State (s, _, _)) = AlgoState.get_prev s
+        fun set_prev (State (s, i, c)) m = State (AlgoState.set_prev s m, i, c)
         fun clear_prev (State (s, i, c)) = State (AlgoState.clear_prev s, i, c)
 
         fun pop_queued (State (s, i, c)) =
             let val (q, s) = AlgoState.pop_queued s in
                 (q, State (s, i, c))
             end
+        fun set_queued (State (s, i, c)) m =
+            State (AlgoState.set_queued s m, i, c)
 
         fun is_non_wellformed (State (s, _, _)) = AlgoState.is_non_wellformed s
 
