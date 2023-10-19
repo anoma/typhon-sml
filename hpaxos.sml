@@ -45,22 +45,41 @@ struct
     struct
         datatype known_msgs = KnownMsgs of MsgSet.set
         datatype recent_msgs = RecentMsgs of MsgSet.set
-        datatype queued_msg = QueuedMsg of msg
+        datatype prev_msg = PrevMsg of msg option
+        datatype queued_msg = QueuedMsg of msg option
+        datatype non_wellformed_msgs = NonWellformedMsgs of MsgSet.set
 
-        datatype state = AlgoState of known_msgs * recent_msgs
+        datatype state = AlgoState of known_msgs * recent_msgs * prev_msg * queued_msg * non_wellformed_msgs
         type t = state
 
-        fun mk () = AlgoState (KnownMsgs MsgSet.empty, RecentMsgs MsgSet.empty)
+        fun mk () = AlgoState (KnownMsgs MsgSet.empty,
+                               RecentMsgs MsgSet.empty,
+                               PrevMsg NONE,
+                               QueuedMsg NONE,
+                               NonWellformedMsgs MsgSet.empty)
 
-        fun is_known (AlgoState (KnownMsgs k, _)) = curry MsgSet.member k
+        fun is_known (AlgoState (KnownMsgs k, _, _, _, _)) = curry MsgSet.member k
+        fun is_recent (AlgoState (_, RecentMsgs r, _, _, _)) = curry MsgSet.member r
 
-        fun is_recent (AlgoState (_, RecentMsgs r)) = curry MsgSet.member r
+        fun get_prev (AlgoState (_, _, PrevMsg p, _, _)) = p
 
-        fun add_known (AlgoState (KnownMsgs k, r)) (m : msg) : state =
-            AlgoState (KnownMsgs (MsgSet.add (k, m)), r)
+        fun clear_prev (AlgoState (k, r, _, q, nw)) =
+            AlgoState (k, r, PrevMsg NONE, q, nw)
 
-        fun add_recent (AlgoState (k, RecentMsgs r)) (m : msg) : state =
-            AlgoState (k, RecentMsgs (MsgSet.add (r, m)))
+        fun pop_queued (AlgoState (k, r, p, QueuedMsg q, nw)) =
+            (q, AlgoState (k, r, p, QueuedMsg NONE, nw))
+
+        fun is_non_wellformed (AlgoState (_, _, _, _, NonWellformedMsgs nw)) =
+            curry MsgSet.member nw
+
+        fun add_known (AlgoState (KnownMsgs k, r, p, q, nw)) (m : msg) : state =
+            AlgoState (KnownMsgs (MsgSet.add (k, m)), r, p, q, nw)
+
+        fun add_recent (AlgoState (k, RecentMsgs r, p, q, nw)) (m : msg) : state =
+            AlgoState (k, RecentMsgs (MsgSet.add (r, m)), p, q, nw)
+
+        fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw)) (m : msg) : state =
+            AlgoState (k, r, p, q, NonWellformedMsgs (MsgSet.add (nw, m)))
     end
 
     (* message info state *)
@@ -120,6 +139,9 @@ struct
         fun get_q (MsgInfo info) m =
             case MsgMap.lookup (info, m) of
                 (_, _, _, _, InfoQ q) => q
+
+        fun store_entry (MsgInfo info) (m, info_entry) =
+            MsgInfo (MsgMap.insert (info, m, info_entry))
     end
 
     (* memo state *)
@@ -141,11 +163,27 @@ struct
         fun is_known (State (s, _, _)) = AlgoState.is_known s
         fun is_recent (State (s, _, _)) = AlgoState.is_recent s
 
+        fun get_prev (State (s, _, _)) = AlgoState.get_prev s
+        fun clear_prev (State (s, i, c)) = State (AlgoState.clear_prev s, i, c)
+
+        fun pop_queued (State (s, i, c)) =
+            let val (q, s) = AlgoState.pop_queued s in
+                (q, State (s, i, c))
+            end
+
+        fun is_non_wellformed (State (s, _, _)) = AlgoState.is_non_wellformed s
+
         fun add_known (State (s, i, c)) (m : msg) =
             State (AlgoState.add_known s m, i, c)
 
         fun add_recent (State (s, i, c)) (m : msg) =
             State (AlgoState.add_recent s m, i, c)
+
+        fun add_known_recent (State (s, i, c)) (m : msg) =
+            State (AlgoState.add_recent (AlgoState.add_known s m) m, i, c)
+
+        fun add_non_wellformed (State (s, i, c)) (m : msg) =
+            State (AlgoState.add_non_wellformed s m, i, c)
 
         fun get_bal_val (State (s, i, c)) m =
             if Msg.is_one_a m then
@@ -157,6 +195,9 @@ struct
         fun get_acc_status (State (_, i, _)) = MessageInfo.get_acc_status i
         fun get_unburied_2as (State (_, i, _)) = MessageInfo.get_unburied_2as i
         fun get_q (State (_, i, _)) = MessageInfo.get_q i
+
+        fun store_info_entry (State (a, i, c)) mi =
+            State (a, MessageInfo.store_entry i mi, c)
     end
 
     type state = State.t
