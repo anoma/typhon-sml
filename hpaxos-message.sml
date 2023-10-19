@@ -43,6 +43,9 @@ sig
     val is_one_b : t -> bool
     val is_two_a : t -> bool
 
+    val mk_one_b : t * t list -> t
+    val mk_two_a : t * t list * learner -> t
+
     (* if the message is 2a, return its learner instance; otherwise, return NONE *)
     val learner : t -> learner option
 
