@@ -48,44 +48,49 @@ struct
         datatype prev_msg = PrevMsg of msg option
         datatype queued_msg = QueuedMsg of msg option
         datatype non_wellformed_msgs = NonWellformedMsgs of MsgSet.set
+        datatype max_ballot = MaxBal of ballot
 
-        datatype state = AlgoState of known_msgs * recent_msgs * prev_msg * queued_msg * non_wellformed_msgs
+        datatype state = AlgoState of known_msgs * recent_msgs * prev_msg *
+                                      queued_msg * non_wellformed_msgs * max_ballot
         type t = state
 
         fun mk () = AlgoState (KnownMsgs MsgSet.empty,
                                RecentMsgs MsgSet.empty,
                                PrevMsg NONE,
                                QueuedMsg NONE,
-                               NonWellformedMsgs MsgSet.empty)
+                               NonWellformedMsgs MsgSet.empty,
+                               MaxBal Msg.Ballot.zero)
 
-        fun is_known (AlgoState (KnownMsgs k, _, _, _, _)) = curry MsgSet.member k
+        fun is_known (AlgoState (KnownMsgs k, _, _, _, _, _)) = curry MsgSet.member k
 
-        fun get_recent (AlgoState (_, RecentMsgs r, _, _, _)) = r
-        fun clear_recent (AlgoState (k, _, p, q, nw)) =
-            AlgoState (k, RecentMsgs MsgSet.empty, p, q, nw)
+        fun add_known (AlgoState (KnownMsgs k, r, p, q, nw, maxb)) (m : msg) : state =
+            AlgoState (KnownMsgs (MsgSet.add (k, m)), r, p, q, nw, maxb)
 
-        fun get_prev (AlgoState (_, _, PrevMsg p, _, _)) = p
-        fun set_prev (AlgoState (k, r, _, q, nw)) m =
-            AlgoState (k, r, PrevMsg (SOME m), q, nw)
-        fun clear_prev (AlgoState (k, r, _, q, nw)) =
-            AlgoState (k, r, PrevMsg NONE, q, nw)
+        fun get_recent (AlgoState (_, RecentMsgs r, _, _, _, _)) = r
 
-        fun pop_queued (AlgoState (k, r, p, QueuedMsg q, nw)) =
-            (q, AlgoState (k, r, p, QueuedMsg NONE, nw))
-        fun set_queued (AlgoState (k, r, p, _, nw)) m =
-            AlgoState (k, r, p, QueuedMsg (SOME m), nw)
+        fun add_recent (AlgoState (k, RecentMsgs r, p, q, nw, maxb)) (m : msg) : state =
+            AlgoState (k, RecentMsgs (MsgSet.add (r, m)), p, q, nw, maxb)
 
-        fun is_non_wellformed (AlgoState (_, _, _, _, NonWellformedMsgs nw)) =
+        fun clear_recent (AlgoState (k, _, p, q, nw, maxb)) =
+            AlgoState (k, RecentMsgs MsgSet.empty, p, q, nw, maxb)
+
+        fun get_prev (AlgoState (_, _, PrevMsg p, _, _, _)) = p
+
+        fun set_prev (AlgoState (k, r, _, q, nw, maxb)) m =
+            AlgoState (k, r, PrevMsg (SOME m), q, nw, maxb)
+        (* fun clear_prev (AlgoState (k, r, _, q, nw)) = *)
+        (*     AlgoState (k, r, PrevMsg NONE, q, nw) *)
+
+        fun pop_queued (AlgoState (k, r, p, QueuedMsg q, nw, maxb)) =
+            (q, AlgoState (k, r, p, QueuedMsg NONE, nw, maxb))
+        fun set_queued (AlgoState (k, r, p, _, nw, maxb)) m =
+            AlgoState (k, r, p, QueuedMsg (SOME m), nw, maxb)
+
+        fun is_non_wellformed (AlgoState (_, _, _, _, NonWellformedMsgs nw, _)) =
             curry MsgSet.member nw
 
-        fun add_known (AlgoState (KnownMsgs k, r, p, q, nw)) (m : msg) : state =
-            AlgoState (KnownMsgs (MsgSet.add (k, m)), r, p, q, nw)
-
-        fun add_recent (AlgoState (k, RecentMsgs r, p, q, nw)) (m : msg) : state =
-            AlgoState (k, RecentMsgs (MsgSet.add (r, m)), p, q, nw)
-
-        fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw)) (m : msg) : state =
-            AlgoState (k, r, p, q, NonWellformedMsgs (MsgSet.add (nw, m)))
+        fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw, maxb)) (m : msg) : state =
+            AlgoState (k, r, p, q, NonWellformedMsgs (MsgSet.add (nw, m)), maxb)
     end
 
     (* message info state *)
@@ -173,7 +178,7 @@ struct
 
         fun get_prev (State (s, _, _)) = AlgoState.get_prev s
         fun set_prev (State (s, i, c)) m = State (AlgoState.set_prev s m, i, c)
-        fun clear_prev (State (s, i, c)) = State (AlgoState.clear_prev s, i, c)
+        (* fun clear_prev (State (s, i, c)) = State (AlgoState.clear_prev s, i, c) *)
 
         fun pop_queued (State (s, i, c)) =
             let val (q, s) = AlgoState.pop_queued s in
