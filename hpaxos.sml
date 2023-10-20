@@ -222,7 +222,7 @@ struct
     type node_id = acceptor_id
 
     (* [msg_to_bal_val] returns a pair (ballot, value) for each known message, including 1a messages *)
-    (* ASSUME: m is not 1a *)
+    (* REQUIRES: m is not 1a *)
     fun compute_bal_val (m : msg) msg_to_bal_val : ballot * value =
         let
             fun helper (x, (max_bal, max_val)) =
@@ -238,7 +238,7 @@ struct
 
     (* [msg_to_bal_val] returns a pair (ballot, value) for each known message and the message m *)
     (* [msg_to_w] returns a (msg * msg option) LearnerAcceptorMap.map for each known message, excluding 1a *)
-    (* ASSUME: m is not 1a *)
+    (* REQUIRES: m is not 1a *)
     fun compute_W (m : msg) msg_to_bal_val msg_to_w
         : (msg * msg option) LearnerAcceptorMap.map =
         let
@@ -300,7 +300,7 @@ struct
 
     (* [msg_to_bal] returns a ballot for each known message, excluding 1a, and the message m *)
     (* [msg_to_acc_status] returns a map (AcceptorStatus.t AcceptorMap.map) for each known message, excluding 1a *)
-    (* ASSUME: m is not 1a *)
+    (* REQUIRES: m is not 1a *)
     fun compute_acceptor_status (m : msg) msg_to_bal msg_to_acc_status
         : AcceptorStatus.t AcceptorMap.map =
         let
@@ -315,7 +315,7 @@ struct
     (* [msg_to_bal_val] returns a pair (ballot, value) for each known message and the message m *)
     (* [msg_to_w] returns a (msg * msg option) LearnerAcceptorMap.map for each known message, excluding 1a *)
     (* [msg_to_unburied] returns a set MsgSet.set for each known message, excluding 1a *)
-    (* ASSUME: m is not 1a *)
+    (* REQUIRES: m is not 1a *)
     fun compute_unburied_2as (m : msg) (g : learner_graph) msg_to_bal_val msg_to_w msg_to_unburied
         : MsgSet.set =
         let
@@ -354,12 +354,12 @@ struct
     (* [msg_to_bal] returns a ballot for each known message, excluding 1a, and the message m *)
     (* [msg_to_acc_status] returns a map (AcceptorStatus.t AcceptorMap.map) for each known message, excluding 1a *)
     (* [msg_to_unburied] returns a set MsgSet.set for each known message, excluding 1a *)
-    (* ASSUME: m is 2a *)
+    (* REQUIRES: m is 2a *)
     fun compute_q (m : msg) (g : learner_graph) msg_to_bal msg_to_acc_status msg_to_unburied
         : acceptor list =
         let
             fun compute_connected (l : learner, m : msg) =
-                (* ASSUME: m is 1b *)
+                (* REQUIRES: m is 1b *)
                 let val caught =
                         AcceptorMap.listKeys (
                             AcceptorMap.filter AcceptorStatus.is_uncaught (msg_to_acc_status m)
@@ -368,7 +368,7 @@ struct
                     LearnerGraph.get_connected g (l, caught)
                 end
             fun compute_connected_2as (l : learner, m : msg) =
-                (* ASSUME: m is 1b *)
+                (* REQUIRES: m is 1b *)
                 let
                     val connected = LearnerSet.fromList (compute_connected (l, m))
                     val m_sender = Msg.sender m
@@ -379,7 +379,7 @@ struct
                     MsgSet.filter pred (msg_to_unburied m)
                 end
             fun is_fresh (l : learner, m : msg) = (* TODO cache the results *)
-                (* ASSUME: m is 1b *)
+                (* REQUIRES: m is 1b *)
                 let
                     val connected_2as  = compute_connected_2as (l, m)
                     val m_bal = msg_to_bal m
@@ -432,11 +432,11 @@ struct
         State.add_non_wellformed s m
         (* ...further actions possible *)
 
-    (* ASSUME: every direct reference is known *)
+    (* REQUIRES: every direct reference is known *)
     fun is_wellformed (s : state) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
         let
             fun compute_msg_info_all m =
-                (* ASSUME: m is not 1a *)
+                (* REQUIRES: m is not 1a *)
                 let
                     val get_bal_val = State.get_bal_val s
                     val get_W = State.get_W s
