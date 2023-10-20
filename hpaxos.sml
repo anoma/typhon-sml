@@ -516,13 +516,15 @@ struct
                   | (NONE, s) =>
                     case Mailbox.recv mbox of
                         SOME m =>
-                        if has_non_wellformed_ref s m then
-                            get_next_wellformed_msg (process_non_wellformed s m)
-                        else
-                            let val (res, s) = check_wellformed_and_update_info s g m in
-                                if res then (m, s) else
+                        let val _ = assert (all_refs_known s m) "wrong message ordering" in
+                            if has_non_wellformed_ref s m then
                                 get_next_wellformed_msg (process_non_wellformed s m)
-                            end
+                            else
+                                let val (res, s) = check_wellformed_and_update_info s g m in
+                                    if res then (m, s) else
+                                    get_next_wellformed_msg (process_non_wellformed s m)
+                                end
+                        end
                       | NONE => get_next_wellformed_msg s
             fun process_1a s m : state =
                 let
