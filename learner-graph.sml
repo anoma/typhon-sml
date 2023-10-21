@@ -11,8 +11,9 @@ sig
     structure Acceptor : ACCEPTOR
     type acceptor = Acceptor.t
 
-    val get_epoch : t -> epoch
-    val all_acceptors : t -> acceptor list
+    val epoch : t -> epoch
+    val learners : t -> learner list
+    val acceptors : t -> acceptor list
 
     val is_quorum : t -> learner * acceptor list -> bool
     val get_connected : t -> learner * acceptor list -> learner list
