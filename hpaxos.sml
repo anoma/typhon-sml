@@ -91,6 +91,11 @@ struct
 
         fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw, maxb)) (m : msg) : state =
             AlgoState (k, r, p, q, NonWellformedMsgs (MsgSet.add (nw, m)), maxb)
+
+        fun get_max (AlgoState (_, _, _, _, _, MaxBal maxb)) = maxb
+        fun set_max (AlgoState (k, r, p, q, nw, _)) bal =
+            AlgoState (k, r, p, q, nw, MaxBal bal)
+
     end
 
     (* message info state *)
@@ -201,11 +206,24 @@ struct
         fun add_non_wellformed (State (s, i, c)) (m : msg) =
             State (AlgoState.add_non_wellformed s m, i, c)
 
+        fun get_max (State (s, _, _)) = AlgoState.get_max s
+
         fun get_bal_val (State (s, i, c)) m =
             if Msg.is_one_a m then
                 valOf (Msg.get_bal_val m)
             else
                 MessageInfo.get_bal_val i m
+
+        fun update_max (state as State (s, i, c)) m =
+            let
+                fun max (a, b) =
+                    case Msg.Ballot.compare (a, b) of LESS => b | _ => a
+                val m_bal = fst (get_bal_val state m)
+                val cur_max = AlgoState.get_max s
+                val new_max = max (m_bal, cur_max)
+            in
+                State (AlgoState.set_max s new_max, i, c)
+            end
 
         fun get_W (State (_, i, _)) = MessageInfo.get_W i
         fun get_acc_status (State (_, i, _)) = MessageInfo.get_acc_status i
