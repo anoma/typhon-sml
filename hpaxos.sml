@@ -358,15 +358,15 @@ struct
             val refs = List.filter (not o Msg.is_one_a) (Msg.get_refs m)
             val u = foldl (fn (r, u) => MsgSet.union (msg_to_unburied r, u)) u0 refs
             val m_w = msg_to_w m
-            val all_acceptors = LearnerGraph.all_acceptors g
+            val all_acceptors = LearnerGraph.acceptors g
             fun buried x =
                 let
                     val x_lrn = valOf (Msg.learner x)
-                    fun doit acc =
+                    fun check acc =
                         case LearnerAcceptorMap.lookup (m_w, (x_lrn, acc)) of
                             (best1, o_best2) =>
                             burying (x, best1) orelse (isSome o_best2 andalso burying (x, (valOf o_best2)))
-                    val acceptors = List.filter doit all_acceptors
+                    val acceptors = List.filter check all_acceptors
                 in
                     LearnerGraph.is_quorum g (m_lrn, acceptors)
                 end
