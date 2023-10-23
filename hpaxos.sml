@@ -555,38 +555,54 @@ struct
                     val prev = State.get_prev s
                     val recent = MsgSet.foldr (op ::) [] (State.get_recent s)
                     val new_1b = Msg.mk_one_b (prev, recent)
+                    val (is_wf, s) = check_wellformed_and_update_info s g new_1b
                 in
-                    let val (wf, s) = check_wellformed_and_update_info s g new_1b in
-                        if wf then
-                            let val s = State.clear_recent s
-                                val s = State.set_prev s new_1b
-                            in
-                                State.set_queued s new_1b
-                            end
-                        else s
-                    end
+                    if is_wf then
+                        let val s = State.clear_recent s
+                            val s = State.set_prev s new_1b
+                        in
+                            State.set_queued s new_1b
+                        end
+                    else s
                 end
             fun process_1b s m : state =
-                s
-            fun process_2a s m : state =
-                s
+                let
+                    val m_bal = fst (State.get_bal_val s m)
+                    val cur_max = State.get_max s
+                    fun process_learner (lrn, s) =
+                        let
+                            val prev = State.get_prev s
+                            val recent = MsgSet.foldr (op ::) [] (State.get_recent s)
+                            val new_2a = Msg.mk_two_a (prev, recent, lrn)
+                            val (is_wf, s) = check_wellformed_and_update_info s g new_2a
+                        in
+                            if is_wf then process_message s m else s
+                        end
+                in
+                    if Msg.Ballot.eq (m_bal, cur_max) then
+                        foldl process_learner s (LearnerGraph.learners g)
+                    else s
+                end
+            and process_message s m =
+                let
+                    val _ = Mailbox.broadcast mbox m
+                    val s = State.add_known s m
+                    val s = State.add_recent s m
+                    val s = State.update_max s m
+                in
+                    case Msg.typ m of
+                        Msg.OneA => process_1a s m
+                      | Msg.OneB => process_1b s m
+                      | Msg.TwoA => s
+                end
             fun loop s =
                 let val (m, s) = get_next_wellformed_msg s in
                     if State.is_known s m then
                         loop s
                     else
-                        let
-                            val _ = Mailbox.broadcast mbox m
-                            val s = State.add_known s m
-                            val s = State.add_recent s m
-                        in
-                            case Msg.typ m of
-                                Msg.OneA => (case process_1a s m of s => loop s)
-                              | Msg.OneB => (case process_1b s m of s => loop s)
-                              | Msg.TwoA => (case process_2a s m of s => loop s)
-                        end
+                        loop (process_message s m)
                 end
         in
-            loop s
+            let val _ = loop s in () end
         end
 end
