@@ -95,8 +95,7 @@ struct
 
         fun set_max (AlgoState (k, r, p, q, nw, _)) bal =
             AlgoState (k, r, p, q, nw, MaxBal bal)
-
-    end
+    end (* AlgoState *)
 
     (* message info state *)
     structure AcceptorStatus =
@@ -158,7 +157,7 @@ struct
 
         fun store_entry (MsgInfo info) (m, info_entry) =
             MsgInfo (MsgMap.insert (info, m, info_entry))
-    end
+    end (* MessageInfo *)
 
     (* memo state *)
     structure Cache =
@@ -183,7 +182,6 @@ struct
 
         fun get_prev (State (s, _, _)) = AlgoState.get_prev s
         fun set_prev (State (s, i, c)) m = State (AlgoState.set_prev s m, i, c)
-        (* fun clear_prev (State (s, i, c)) = State (AlgoState.clear_prev s, i, c) *)
 
         fun pop_queued (State (s, i, c)) =
             let val (q, s) = AlgoState.pop_queued s in
@@ -233,7 +231,7 @@ struct
 
         fun store_info_entry (State (a, i, c)) mi =
             State (a, MessageInfo.store_entry i mi, c)
-    end
+    end (* State *)
 
     type state = State.t
 
@@ -609,4 +607,4 @@ struct
         in
             let val _ = loop s in () end
         end
-end
+end (* HPaxos *)
