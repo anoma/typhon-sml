@@ -40,6 +40,12 @@ struct
                 (LearnerOrdKey (Msg.Learner))
                 (AcceptorOrdKey (Msg.Acceptor)))
 
+    structure LearnerMsgMap : ORD_MAP =
+        RedBlackMapFn (
+            ProdLexOrdKey
+                (LearnerOrdKey (Msg.Learner))
+                (MessageOrdKey (Msg)))
+
     (* algorithm state *)
     structure AlgoState =
     struct
@@ -162,10 +168,15 @@ struct
     (* memo state *)
     structure Cache =
     struct
-        datatype cache = Cache of int
+        datatype is_fresh_cache = IsFresh of (bool LearnerMsgMap.map) ref
+        datatype cache = Cache of is_fresh_cache
         type t = cache
 
-        fun mk () = Cache 0
+        fun mk () = Cache (IsFresh (ref LearnerMsgMap.empty))
+
+        fun get_is_fresh (Cache (IsFresh f)) = curry LearnerMsgMap.find (!f)
+        fun put_is_fresh (Cache (IsFresh f)) (lm, v) =
+            f := LearnerMsgMap.insert (!f, lm, v)
     end
 
     structure State =
@@ -173,7 +184,7 @@ struct
         datatype state = State of AlgoState.t * MessageInfo.t * Cache.t
         type t = state
 
-        fun mk () = State (AlgoState.mk (), MessageInfo.mk (), Cache.mk ())
+        fun mk () = State (AlgoState.mk (), MessageInfo.mk (), (Cache.mk ()))
 
         fun is_known (State (s, _, _)) = AlgoState.is_known s
 
@@ -231,6 +242,10 @@ struct
 
         fun store_info_entry (State (a, i, c)) mi =
             State (a, MessageInfo.store_entry i mi, c)
+
+        fun get_is_fresh (State (_, _, c)) = Cache.get_is_fresh c
+        fun put_is_fresh (State (_, _, c)) = Cache.put_is_fresh c
+        (* fun cache_fresh (State (a, i, c)) mf = State (a, i, Cache.add_fresh c mf) *)
     end (* State *)
 
     type state = State.t
@@ -381,7 +396,7 @@ struct
     (* [msg_to_acc_status] returns a map (AcceptorStatus.t AcceptorMap.map) for each known message, excluding 1a *)
     (* [msg_to_unburied] returns a set MsgSet.set for each known message, excluding 1a *)
     (* REQUIRES: m is 2a *)
-    fun compute_q (m : msg) (g : learner_graph) msg_to_bal msg_to_acc_status msg_to_unburied
+    fun compute_q (s : state) (m : msg) (g : learner_graph) msg_to_bal msg_to_acc_status msg_to_unburied
         : acceptor list =
         let
             fun compute_connected (l : learner, m : msg) =
@@ -404,20 +419,30 @@ struct
                 in
                     MsgSet.filter pred (msg_to_unburied m)
                 end
-            fun is_fresh (l : learner, m : msg) = (* TODO cache the results *)
+            fun is_fresh (l : learner, m : msg) =
                 (* REQUIRES: m is 1b *)
-                let
-                    val connected_2as  = compute_connected_2as (l, m)
-                    val m_bal = msg_to_bal m
-                    fun from_this_sender x = Msg.Ballot.eq (msg_to_bal x, m_bal)
-                in
-                    MsgSet.all from_this_sender connected_2as
-                end
+                    let
+                        val connected_2as  = compute_connected_2as (l, m)
+                        val m_bal = msg_to_bal m
+                        fun from_this_sender x = Msg.Ballot.eq (msg_to_bal x, m_bal)
+                    in
+                        MsgSet.all from_this_sender connected_2as
+                    end
+            fun is_fresh' s (l : learner, m : msg) =
+                (* REQUIRES: m is 1b *)
+                case State.get_is_fresh s (l, m) of
+                    SOME b => b
+                  | NONE =>
+                    let val res = is_fresh (l, m)
+                        val _ = State.put_is_fresh s ((l, m), res)
+                    in
+                        res
+                    end
             val m_tran =
                 let
                     val m_lrn = valOf (Msg.learner m)
                     val m_bal = msg_to_bal m
-                    fun pred x = Msg.is_one_b x andalso is_fresh (m_lrn, x)
+                    fun pred x = Msg.is_one_b x andalso is_fresh' s (m_lrn, x)
                     fun cont x = Msg.Ballot.eq (msg_to_bal x, m_bal)
                 in
                     MsgUtil.tran pred cont m
@@ -461,7 +486,7 @@ struct
     (* REQUIRES: every direct reference is known *)
     fun is_wellformed (s : state) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
         let
-            fun compute_msg_info_all m =
+            fun compute_msg_info_all s m =
                 (* REQUIRES: m is not 1a *)
                 let
                     val get_bal_val = State.get_bal_val s
@@ -479,7 +504,7 @@ struct
                     val m_q =
                         if Msg.is_one_b m then [] else
                         (* case 2a *)
-                        compute_q m g (fst o get_bal_val_with_m) get_acc_status get_unburied_2as
+                        compute_q s m g (fst o get_bal_val_with_m) get_acc_status get_unburied_2as
                 in
                     MessageInfo.mk_info_all (m_bal_val, m_W, m_acc_status, m_unburied_2as, m_q)
                 end
@@ -508,14 +533,14 @@ struct
                 case Msg.typ m of
                     Msg.OneA => (is_wellformed_1a m, NONE)
                   | Msg.OneB =>
-                    let val m_info_all = compute_msg_info_all m in
+                    let val m_info_all = compute_msg_info_all s m in
                         if is_wellformed_1b m m_info_all then
                             (true, SOME m_info_all)
                         else
                             (false, NONE)
                     end
                   | Msg.TwoA =>
-                    let val m_info_all = compute_msg_info_all m in
+                    let val m_info_all = compute_msg_info_all s m in
                         if is_wellformed_2a m m_info_all then
                             (true, SOME m_info_all)
                         else
