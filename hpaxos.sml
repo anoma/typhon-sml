@@ -63,12 +63,12 @@ struct
 
         fun is_known (AlgoState (KnownMsgs k, _, _, _, _, _)) = curry MsgSet.member k
 
-        fun add_known (AlgoState (KnownMsgs k, r, p, q, nw, maxb)) (m : msg) : state =
+        fun add_known (AlgoState (KnownMsgs k, r, p, q, nw, maxb)) m =
             AlgoState (KnownMsgs (MsgSet.add (k, m)), r, p, q, nw, maxb)
 
         fun get_recent (AlgoState (_, RecentMsgs r, _, _, _, _)) = r
 
-        fun add_recent (AlgoState (k, RecentMsgs r, p, q, nw, maxb)) (m : msg) : state =
+        fun add_recent (AlgoState (k, RecentMsgs r, p, q, nw, maxb)) m =
             AlgoState (k, RecentMsgs (MsgSet.add (r, m)), p, q, nw, maxb)
 
         fun clear_recent (AlgoState (k, _, p, q, nw, maxb)) =
@@ -78,21 +78,21 @@ struct
 
         fun set_prev (AlgoState (k, r, _, q, nw, maxb)) m =
             AlgoState (k, r, PrevMsg (SOME m), q, nw, maxb)
-        (* fun clear_prev (AlgoState (k, r, _, q, nw)) = *)
-        (*     AlgoState (k, r, PrevMsg NONE, q, nw) *)
 
         fun pop_queued (AlgoState (k, r, p, QueuedMsg q, nw, maxb)) =
             (q, AlgoState (k, r, p, QueuedMsg NONE, nw, maxb))
+
         fun set_queued (AlgoState (k, r, p, _, nw, maxb)) m =
             AlgoState (k, r, p, QueuedMsg (SOME m), nw, maxb)
 
         fun is_non_wellformed (AlgoState (_, _, _, _, NonWellformedMsgs nw, _)) =
             curry MsgSet.member nw
 
-        fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw, maxb)) (m : msg) : state =
+        fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw, maxb)) m =
             AlgoState (k, r, p, q, NonWellformedMsgs (MsgSet.add (nw, m)), maxb)
 
         fun get_max (AlgoState (_, _, _, _, _, MaxBal maxb)) = maxb
+
         fun set_max (AlgoState (k, r, p, q, nw, _)) bal =
             AlgoState (k, r, p, q, nw, MaxBal bal)
 
@@ -189,21 +189,22 @@ struct
             let val (q, s) = AlgoState.pop_queued s in
                 (q, State (s, i, c))
             end
+
         fun set_queued (State (s, i, c)) m =
             State (AlgoState.set_queued s m, i, c)
 
         fun is_non_wellformed (State (s, _, _)) = AlgoState.is_non_wellformed s
 
-        fun add_known (State (s, i, c)) (m : msg) =
+        fun add_known (State (s, i, c)) m =
             State (AlgoState.add_known s m, i, c)
 
-        fun add_recent (State (s, i, c)) (m : msg) =
+        fun add_recent (State (s, i, c)) m =
             State (AlgoState.add_recent s m, i, c)
 
-        fun add_known_recent (State (s, i, c)) (m : msg) =
+        fun add_known_recent (State (s, i, c)) m =
             State (AlgoState.add_recent (AlgoState.add_known s m) m, i, c)
 
-        fun add_non_wellformed (State (s, i, c)) (m : msg) =
+        fun add_non_wellformed (State (s, i, c)) m =
             State (AlgoState.add_non_wellformed s m, i, c)
 
         fun get_max (State (s, _, _)) = AlgoState.get_max s
