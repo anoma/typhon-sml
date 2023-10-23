@@ -267,40 +267,44 @@ struct
         : (msg * msg option) LearnerAcceptorMap.map =
         let
             fun pick_best_two_from_list (ms : msg list) : (msg * msg option) option =
-                let fun picker (x, NONE) = SOME (x, NONE)
-                      | picker (x, SOME (best1, o_best2)) =
-                        let
-                            fun pick_second_best
-                                    fst_best_val candidate (candidate_bal, candidate_val) cur_snd_best_option =
-                                if Msg.Value.eq (candidate_val, fst_best_val) then
-                                    cur_snd_best_option
-                                else
-                                    let val new_snd_best =
-                                            case cur_snd_best_option of
-                                                NONE => candidate
-                                              | SOME cur_snd_best =>
-                                                let val (bal2, _) = msg_to_bal_val cur_snd_best in
-                                                    case Msg.Ballot.compare (candidate_bal, bal2) of
-                                                        GREATER => candidate
-                                                      | _ => cur_snd_best
-                                                end
-                                    in
-                                        SOME new_snd_best
-                                    end
-                            val new_best =
-                                let
-                                    val (b, v) = msg_to_bal_val x
-                                    val (bal1, val1) = msg_to_bal_val best1
+                let
+                    fun pick_first_best ms : msg option =
+                        let fun picker (x, NONE) = SOME x
+                              | picker (x, SOME cur_fst_best) =
+                                let val (b, _) = msg_to_bal_val x
+                                    val (cur_fst_bal, _) = msg_to_bal_val cur_fst_best
                                 in
-                                    case Msg.Ballot.compare (b, bal1) of
-                                        GREATER => (x, pick_second_best v best1 (bal1, val1) o_best2)
-                                      | _ => (best1, pick_second_best val1 x (b, v) o_best2)
+                                    case Msg.Ballot.compare (cur_fst_bal, b) of
+                                        LESS => SOME x
+                                      | _ => SOME cur_fst_best
                                 end
                         in
-                            SOME new_best
+                            foldl picker NONE ms
+                        end
+                    fun pick_second_best ms fst_best_val =
+                        let fun picker (x, cur_snd_best_o) =
+                                let val (b, v) = msg_to_bal_val x in
+                                    if Msg.Value.eq (v, fst_best_val) then
+                                        cur_snd_best_o
+                                    else
+                                        case cur_snd_best_o of
+                                            NONE => SOME x
+                                          | SOME cur_snd_best =>
+                                            let val (cur_snd_bal, _) = msg_to_bal_val cur_snd_best in
+                                                (case Msg.Ballot.compare (cur_snd_bal, b) of
+                                                     LESS => SOME x
+                                                   | _ => cur_snd_best_o)
+                                            end
+                                end
+                        in
+                            foldl picker NONE ms
                         end
                 in
-                    foldl picker NONE ms
+                    case pick_first_best ms of
+                        NONE => NONE
+                      | SOME fst_best =>
+                        SOME (fst_best,
+                              pick_second_best ms (snd (msg_to_bal_val fst_best)))
                 end
             fun pick_best_two (a : msg * msg option, b : msg * msg option) =
                 let fun to_list (best1, NONE) = [best1]
