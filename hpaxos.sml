@@ -246,7 +246,6 @@ struct
 
         fun get_is_fresh (State (_, _, c)) = Cache.get_is_fresh c
         fun put_is_fresh (State (_, _, c)) = Cache.put_is_fresh c
-        (* fun cache_fresh (State (a, i, c)) mf = State (a, i, Cache.add_fresh c mf) *)
     end (* State *)
 
     type state = State.t
