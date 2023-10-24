@@ -72,9 +72,8 @@ functor MessageUtil (Msg : HPAXOS_MESSAGE) =
 struct
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
 
-    (* TODO remove if not used *)
-    fun does_reference_1a m : bool =
-        isSome (List.find Msg.is_one_a (Msg.get_refs m))
+    (* fun does_reference_1a m : bool = *)
+    (*     isSome (List.find Msg.is_one_a (Msg.get_refs m)) *)
 
     fun references_exactly_one_1a m : bool =
         let fun check (x, (found, false)) = (found, false)
