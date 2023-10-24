@@ -453,7 +453,7 @@ struct
                     foldl helper AcceptorSet.empty ms
                 end
         in
-            AcceptorSet.foldr (op ::) [] (senders m_tran)
+            AcceptorSet.toList (senders m_tran)
         end
 
     fun prev_wellformed (m : msg) : bool =
@@ -581,7 +581,7 @@ struct
             fun process_1a s m : state =
                 let
                     val prev = State.get_prev s
-                    val recent = MsgSet.foldr (op ::) [] (State.get_recent s)
+                    val recent = MsgSet.toList (State.get_recent s)
                     val new_1b = Msg.mk_one_b (prev, recent)
                     val (is_wf, s) = check_wellformed_and_update_info s g new_1b
                 in
@@ -600,7 +600,7 @@ struct
                     fun process_learner (lrn, s) =
                         let
                             val prev = State.get_prev s
-                            val recent = MsgSet.foldr (op ::) [] (State.get_recent s)
+                            val recent = MsgSet.toList (State.get_recent s)
                             val new_2a = Msg.mk_two_a (prev, recent, lrn)
                             val (is_wf, s) = check_wellformed_and_update_info s g new_2a
                         in
