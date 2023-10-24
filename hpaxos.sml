@@ -463,8 +463,7 @@ struct
             fun from_this_sender x = Msg.Acceptor.eq ((Msg.sender x), m_acc)
         in
             case Msg.get_prev m of
-                NONE =>
-                List.all (not o from_this_sender) m_refs
+                NONE => List.all (not o from_this_sender) m_refs
               | SOME prev =>
                 isSome (List.find (Fn.curry Msg.eq prev) m_refs) andalso
                 let fun check_ref x =
