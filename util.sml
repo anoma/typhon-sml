@@ -1,9 +1,6 @@
-fun id x = x
 
 fun fst (x, _) = x
 fun snd (_, x) = x
-fun swap (x, y) = (y, x)
-fun curry f x y = f (x, y)
 
 fun assert cond str =
     if cond then () else raise Fail ("assert " ^ str)

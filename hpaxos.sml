@@ -67,7 +67,8 @@ struct
                                NonWellformedMsgs MsgSet.empty,
                                MaxBal Msg.Ballot.zero)
 
-        fun is_known (AlgoState (KnownMsgs k, _, _, _, _, _)) = curry MsgSet.member k
+        fun is_known (AlgoState (KnownMsgs k, _, _, _, _, _)) =
+            Fn.curry MsgSet.member k
 
         fun add_known (AlgoState (KnownMsgs k, r, p, q, nw, maxb)) m =
             AlgoState (KnownMsgs (MsgSet.add (k, m)), r, p, q, nw, maxb)
@@ -92,7 +93,7 @@ struct
             AlgoState (k, r, p, QueuedMsg (SOME m), nw, maxb)
 
         fun is_non_wellformed (AlgoState (_, _, _, _, NonWellformedMsgs nw, _)) =
-            curry MsgSet.member nw
+            Fn.curry MsgSet.member nw
 
         fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw, maxb)) m =
             AlgoState (k, r, p, q, NonWellformedMsgs (MsgSet.add (nw, m)), maxb)
@@ -174,7 +175,7 @@ struct
 
         fun mk () = Cache (IsFresh (ref LearnerMsgMap.empty))
 
-        fun get_is_fresh (Cache (IsFresh f)) = curry LearnerMsgMap.find (!f)
+        fun get_is_fresh (Cache (IsFresh f)) = Fn.curry LearnerMsgMap.find (!f)
         fun put_is_fresh (Cache (IsFresh f)) (lm, v) =
             f := LearnerMsgMap.insert (!f, lm, v)
     end
@@ -465,7 +466,7 @@ struct
                 NONE =>
                 List.all (not o from_this_sender) m_refs
               | SOME prev =>
-                isSome (List.find (curry Msg.eq prev) m_refs) andalso
+                isSome (List.find (Fn.curry Msg.eq prev) m_refs) andalso
                 let fun check_ref x =
                         not (from_this_sender x) orelse Msg.eq (x, prev)
                 in
