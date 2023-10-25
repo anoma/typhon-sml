@@ -602,7 +602,13 @@ struct
                             val new_2a = Msg.mk_two_a (prev, recent, lrn)
                             val (is_wf, s) = check_wellformed_and_update_info s g new_2a
                         in
-                            if is_wf then process_message s m else s
+                            if is_wf then
+                                let val s = State.clear_recent s
+                                    val s = State.set_prev s new_2a
+                                in
+                                    process_message s new_2a
+                                end
+                            else s
                         end
                 in
                     if Msg.Ballot.eq (m_bal, cur_max) then
