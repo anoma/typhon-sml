@@ -52,56 +52,48 @@ struct
         datatype known_msgs = KnownMsgs of MsgSet.set
         datatype recent_msgs = RecentMsgs of MsgSet.set
         datatype prev_msg = PrevMsg of msg option
-        datatype queued_msg = QueuedMsg of msg option
         datatype non_wellformed_msgs = NonWellformedMsgs of MsgSet.set
         datatype max_ballot = MaxBal of ballot
 
         datatype state = AlgoState of known_msgs * recent_msgs * prev_msg *
-                                      queued_msg * non_wellformed_msgs * max_ballot
+                                      non_wellformed_msgs * max_ballot
         type t = state
 
         fun mk () = AlgoState (KnownMsgs MsgSet.empty,
                                RecentMsgs MsgSet.empty,
                                PrevMsg NONE,
-                               QueuedMsg NONE,
                                NonWellformedMsgs MsgSet.empty,
                                MaxBal Msg.Ballot.zero)
 
-        fun is_known (AlgoState (KnownMsgs k, _, _, _, _, _)) =
+        fun is_known (AlgoState (KnownMsgs k, _, _, _, _)) =
             Fn.curry MsgSet.member k
 
-        fun add_known (AlgoState (KnownMsgs k, r, p, q, nw, maxb)) m =
-            AlgoState (KnownMsgs (MsgSet.add (k, m)), r, p, q, nw, maxb)
+        fun add_known (AlgoState (KnownMsgs k, r, p, nw, maxb)) m =
+            AlgoState (KnownMsgs (MsgSet.add (k, m)), r, p, nw, maxb)
 
-        fun get_recent (AlgoState (_, RecentMsgs r, _, _, _, _)) = r
+        fun get_recent (AlgoState (_, RecentMsgs r, _, _, _)) = r
 
-        fun add_recent (AlgoState (k, RecentMsgs r, p, q, nw, maxb)) m =
-            AlgoState (k, RecentMsgs (MsgSet.add (r, m)), p, q, nw, maxb)
+        fun add_recent (AlgoState (k, RecentMsgs r, p, nw, maxb)) m =
+            AlgoState (k, RecentMsgs (MsgSet.add (r, m)), p, nw, maxb)
 
-        fun clear_recent (AlgoState (k, _, p, q, nw, maxb)) =
-            AlgoState (k, RecentMsgs MsgSet.empty, p, q, nw, maxb)
+        fun clear_recent (AlgoState (k, _, p, nw, maxb)) =
+            AlgoState (k, RecentMsgs MsgSet.empty, p, nw, maxb)
 
-        fun get_prev (AlgoState (_, _, PrevMsg p, _, _, _)) = p
+        fun get_prev (AlgoState (_, _, PrevMsg p, _, _)) = p
 
-        fun set_prev (AlgoState (k, r, _, q, nw, maxb)) m =
-            AlgoState (k, r, PrevMsg (SOME m), q, nw, maxb)
+        fun set_prev (AlgoState (k, r, _, nw, maxb)) m =
+            AlgoState (k, r, PrevMsg (SOME m), nw, maxb)
 
-        fun pop_queued (AlgoState (k, r, p, QueuedMsg q, nw, maxb)) =
-            (q, AlgoState (k, r, p, QueuedMsg NONE, nw, maxb))
-
-        fun set_queued (AlgoState (k, r, p, _, nw, maxb)) m =
-            AlgoState (k, r, p, QueuedMsg (SOME m), nw, maxb)
-
-        fun is_non_wellformed (AlgoState (_, _, _, _, NonWellformedMsgs nw, _)) =
+        fun is_non_wellformed (AlgoState (_, _, _, NonWellformedMsgs nw, _)) =
             Fn.curry MsgSet.member nw
 
-        fun add_non_wellformed (AlgoState (k, r, p, q, NonWellformedMsgs nw, maxb)) m =
-            AlgoState (k, r, p, q, NonWellformedMsgs (MsgSet.add (nw, m)), maxb)
+        fun add_non_wellformed (AlgoState (k, r, p, NonWellformedMsgs nw, maxb)) m =
+            AlgoState (k, r, p, NonWellformedMsgs (MsgSet.add (nw, m)), maxb)
 
-        fun get_max (AlgoState (_, _, _, _, _, MaxBal maxb)) = maxb
+        fun get_max (AlgoState (_, _, _, _, MaxBal maxb)) = maxb
 
-        fun set_max (AlgoState (k, r, p, q, nw, _)) bal =
-            AlgoState (k, r, p, q, nw, MaxBal bal)
+        fun set_max (AlgoState (k, r, p, nw, _)) bal =
+            AlgoState (k, r, p, nw, MaxBal bal)
     end (* AlgoState *)
 
     (* message info state *)
@@ -194,14 +186,6 @@ struct
 
         fun get_prev (State (s, _, _)) = AlgoState.get_prev s
         fun set_prev (State (s, i, c)) m = State (AlgoState.set_prev s m, i, c)
-
-        fun pop_queued (State (s, i, c)) =
-            let val (q, s) = AlgoState.pop_queued s in
-                (q, State (s, i, c))
-            end
-
-        fun set_queued (State (s, i, c)) m =
-            State (AlgoState.set_queued s m, i, c)
 
         fun is_non_wellformed (State (s, _, _)) = AlgoState.is_non_wellformed s
 
@@ -561,21 +545,18 @@ struct
     fun run (Acc (id, Graph g, s, mbox)) =
         let
             fun get_next_wellformed_msg s : msg * state =
-                case State.pop_queued s of
-                    (SOME m, s) => (m, s)
-                  | (NONE, s) =>
-                    case Mailbox.recv mbox of
-                        SOME m =>
-                        let val _ = assert (all_refs_known s m) "wrong message ordering" in
-                            if has_non_wellformed_ref s m then
+                case Mailbox.recv mbox of
+                    NONE => get_next_wellformed_msg s
+                  | SOME m =>
+                    let val _ = assert (all_refs_known s m) "wrong message ordering" in
+                        if has_non_wellformed_ref s m then
+                            get_next_wellformed_msg (process_non_wellformed s m)
+                        else
+                            let val (res, s) = check_wellformed_and_update_info s g m in
+                                if res then (m, s) else
                                 get_next_wellformed_msg (process_non_wellformed s m)
-                            else
-                                let val (res, s) = check_wellformed_and_update_info s g m in
-                                    if res then (m, s) else
-                                    get_next_wellformed_msg (process_non_wellformed s m)
-                                end
-                        end
-                      | NONE => get_next_wellformed_msg s
+                            end
+                    end
             fun process_1a s m : state =
                 let
                     val prev = State.get_prev s
@@ -587,11 +568,11 @@ struct
                         let val s = State.clear_recent s
                             val s = State.set_prev s new_1b
                         in
-                            State.set_queued s new_1b
+                            process_message s new_1b
                         end
                     else s
                 end
-            fun process_1b s m : state =
+            and process_1b s m : state =
                 let
                     val m_bal = fst (State.get_bal_val s m)
                     val cur_max = State.get_max s
