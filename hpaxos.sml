@@ -118,43 +118,25 @@ struct
 
     structure MessageInfo =
     struct
-        datatype info_bal_val = InfoBalVal of (ballot * value)
-        datatype info_W = InfoW of (msg * msg option) LearnerAcceptorMap.map
-        datatype info_acc_status = InfoAccStatus of AcceptorStatus.t AcceptorMap.map
-        datatype info_unburied_2as = InfoUnburied of MsgSet.set
-        datatype info_q = InfoQ of acceptor list
+        type info_entry = { info_bal_val : ballot * value,
+                            info_W : (msg * msg option) LearnerAcceptorMap.map,
+                            info_acc_status : AcceptorStatus.t AcceptorMap.map,
+                            info_unburied_2as : MsgSet.set,
+                            info_q : acceptor list }
 
-        type info_all = info_bal_val * info_W * info_acc_status * info_unburied_2as * info_q
-        datatype msg_info = MsgInfo of info_all MsgMap.map
+        datatype msg_info = MsgInfo of info_entry MsgMap.map
 
         type t = msg_info
 
         fun mk () = MsgInfo MsgMap.empty
 
-        fun mk_info_all (bv, w, s, u, q) =
-            (InfoBalVal bv, InfoW w, InfoAccStatus s, InfoUnburied u, InfoQ q)
+        fun get_bal_val (MsgInfo info) m = #info_bal_val (MsgMap.lookup (info, m))
+        fun get_W (MsgInfo info) m = #info_W (MsgMap.lookup (info, m))
+        fun get_acc_status (MsgInfo info) m = #info_acc_status (MsgMap.lookup (info, m))
+        fun get_unburied_2as (MsgInfo info) m = #info_unburied_2as (MsgMap.lookup (info, m))
+        fun get_q (MsgInfo info) m = #info_q (MsgMap.lookup (info, m))
 
-        fun get_bal_val (MsgInfo info) m =
-            case MsgMap.lookup (info, m) of
-                (InfoBalVal bv, _, _, _, _) => bv
-
-        fun get_W (MsgInfo info) m =
-            case MsgMap.lookup (info, m) of
-                (_, InfoW w, _, _, _) => w
-
-        fun get_acc_status (MsgInfo info) m =
-            case MsgMap.lookup (info, m) of
-                (_, _, InfoAccStatus s, _, _) => s
-
-        fun get_unburied_2as (MsgInfo info) m =
-            case MsgMap.lookup (info, m) of
-                (_, _, _, InfoUnburied u, _) => u
-
-        fun get_q (MsgInfo info) m =
-            case MsgMap.lookup (info, m) of
-                (_, _, _, _, InfoQ q) => q
-
-        fun store_entry (MsgInfo info) (m, info_entry) =
+        fun store_entry (MsgInfo info) (m, info_entry : info_entry) =
             MsgInfo (MsgMap.insert (info, m, info_entry))
     end (* MessageInfo *)
 
@@ -467,9 +449,9 @@ struct
         (* ...further actions possible *)
 
     (* REQUIRES: every direct reference is known *)
-    fun is_wellformed (s : state) (g : learner_graph) (m : msg) : bool * MessageInfo.info_all option =
+    fun is_wellformed (s : state) (g : learner_graph) (m : msg) : bool * MessageInfo.info_entry option =
         let
-            fun compute_msg_info_all s m =
+            fun compute_msg_info_entry s m : MessageInfo.info_entry =
                 (* REQUIRES: m is not 1a *)
                 let
                     val get_bal_val = State.get_bal_val s
@@ -489,17 +471,22 @@ struct
                         (* case 2a *)
                         compute_q s m g (fst o get_bal_val_with_m) get_acc_status get_unburied_2as
                 in
-                    MessageInfo.mk_info_all (m_bal_val, m_W, m_acc_status, m_unburied_2as, m_q)
+                    { info_bal_val = m_bal_val,
+                      info_W = m_W,
+                      info_acc_status = m_acc_status,
+                      info_unburied_2as = m_unburied_2as,
+                      info_q = m_q }
                 end
             fun is_wellformed_1a m =
                 (* TODO this check might be redundant depending on how `get_prev` is defined *)
                 not (isSome (Msg.get_prev m)) andalso
                 (* TODO this check might be redundant depending on how `get_refs` is defined *)
                 null (Msg.get_refs m)
-            fun is_wellformed_1b m (MessageInfo.InfoBalVal (m_bal, _), _, _, _, _) =
+            fun is_wellformed_1b m (m_info_entry : MessageInfo.info_entry) =
                 MsgUtil.references_exactly_one_1a m andalso
                 let
                     val get_bal_val = State.get_bal_val s
+                    val (m_bal, _) = #info_bal_val m_info_entry
                     fun check_ref x =
                         Msg.is_one_a x orelse
                         case get_bal_val x of
@@ -507,25 +494,25 @@ struct
                 in
                     List.all check_ref (Msg.get_refs m)
                 end
-            fun is_wellformed_2a m (_, _, _, _, MessageInfo.InfoQ m_q) =
+            fun is_wellformed_2a m (m_info_entry : MessageInfo.info_entry) =
                 not (null (Msg.get_refs m)) andalso
-                LearnerGraph.is_quorum g (valOf (Msg.learner m), m_q)
+                LearnerGraph.is_quorum g (valOf (Msg.learner m), #info_q m_info_entry)
         in
             (* optionally, we might want to check that every reference occurs at most once (call to refs_nondup) *)
             if prev_wellformed m andalso MsgUtil.refs_nondup m then
                 case Msg.typ m of
                     Msg.OneA => (is_wellformed_1a m, NONE)
                   | Msg.OneB =>
-                    let val m_info_all = compute_msg_info_all s m in
-                        if is_wellformed_1b m m_info_all then
-                            (true, SOME m_info_all)
+                    let val m_info_entry = compute_msg_info_entry s m in
+                        if is_wellformed_1b m m_info_entry then
+                            (true, SOME m_info_entry)
                         else
                             (false, NONE)
                     end
                   | Msg.TwoA =>
-                    let val m_info_all = compute_msg_info_all s m in
-                        if is_wellformed_2a m m_info_all then
-                            (true, SOME m_info_all)
+                    let val m_info_entry = compute_msg_info_entry s m in
+                        if is_wellformed_2a m m_info_entry then
+                            (true, SOME m_info_entry)
                         else
                             (false, NONE)
                     end
