@@ -247,43 +247,32 @@ struct
         let
             fun pick_best_two_from_list (ms : msg list) : (msg * msg option) option =
                 let
-                    fun pick_first_best ms : msg option =
-                        let fun picker (x, NONE) = SOME x
-                              | picker (x, SOME cur_fst_best) =
-                                let val (b, _) = msg_to_bal_val x
-                                    val (cur_fst_bal, _) = msg_to_bal_val cur_fst_best
-                                in
-                                    case Msg.Ballot.compare (cur_fst_bal, b) of
-                                        LESS => SOME x
-                                      | _ => SOME cur_fst_best
-                                end
+                    val ballot = fst o msg_to_bal_val
+                    val value = snd o msg_to_bal_val
+                    fun pick_best pred cmp lst =
+                        let
+                            fun choose (x, cur_best_o) =
+                                if pred x then
+                                    case cur_best_o of
+                                        NONE => SOME x
+                                      | SOME cur_best =>
+                                        case cmp (cur_best, x) of
+                                            LESS => SOME x
+                                         |  _ => cur_best_o
+                                else cur_best_o
                         in
-                            foldl picker NONE ms
+                            foldl choose NONE lst
                         end
-                    fun pick_second_best ms fst_best_val =
-                        let fun picker (x, cur_snd_best_o) =
-                                let val (b, v) = msg_to_bal_val x in
-                                    if Msg.Value.eq (v, fst_best_val) then
-                                        cur_snd_best_o
-                                    else
-                                        case cur_snd_best_o of
-                                            NONE => SOME x
-                                          | SOME cur_snd_best =>
-                                            let val (cur_snd_bal, _) = msg_to_bal_val cur_snd_best in
-                                                (case Msg.Ballot.compare (cur_snd_bal, b) of
-                                                     LESS => SOME x
-                                                   | _ => cur_snd_best_o)
-                                            end
-                                end
+                    fun cmp_by_ballot (x, y) = Msg.Ballot.compare (ballot x, ballot y)
+                    fun pick_first_best ms = pick_best (Fn.const true) cmp_by_ballot ms
+                    fun pick_second_best ms fst_best =
+                        let val fst_best_val = value fst_best
+                            fun pred x = not (Msg.Value.eq (value x, fst_best_val))
                         in
-                            foldl picker NONE ms
+                            pick_best pred cmp_by_ballot ms
                         end
                 in
-                    case pick_first_best ms of
-                        NONE => NONE
-                      | SOME fst_best =>
-                        SOME (fst_best,
-                              pick_second_best ms (snd (msg_to_bal_val fst_best)))
+                    Option.map (fn x => (x, pick_second_best ms x)) (pick_first_best ms)
                 end
             fun pick_best_two (a : msg * msg option, b : msg * msg option) =
                 let fun to_list (best1, NONE) = [best1]
