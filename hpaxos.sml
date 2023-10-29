@@ -151,7 +151,7 @@ struct
 
         fun get_is_fresh (Cache (IsFresh f)) = Fn.curry LearnerMsgMap.find (!f)
         fun put_is_fresh (Cache (IsFresh f)) (lm, v) =
-            f := LearnerMsgMap.insert (!f, lm, v)
+            Ref.modify (fn map => LearnerMsgMap.insert (map, lm, v)) f
     end
 
     structure State =
