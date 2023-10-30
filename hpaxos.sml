@@ -280,7 +280,7 @@ struct
                 in
                     valOf (pick_best_two_from_list (to_list a @ to_list b))
                 end
-            fun helper (r, w) = LearnerAcceptorMap.unionWith pick_best_two (msg_to_w r, w)
+            fun join (r, w) = LearnerAcceptorMap.unionWith pick_best_two (msg_to_w r, w)
             val w0 =
                 if Msg.is_two_a m then
                     LearnerAcceptorMap.insert
@@ -291,7 +291,7 @@ struct
                     LearnerAcceptorMap.empty
             val refs = List.filter (not o Msg.is_one_a) (Msg.get_refs m)
         in
-            foldl helper w0 refs
+            foldl join w0 refs
         end
 
     (* [msg_to_bal] returns a ballot for each known message, excluding 1a, and the message m *)
@@ -474,12 +474,11 @@ struct
             fun is_wellformed_1b m (m_info_entry : MessageInfo.info_entry) =
                 MsgUtil.references_exactly_one_1a m andalso
                 let
-                    val get_bal_val = State.get_bal_val s
+                    val ballot = fst o (State.get_bal_val s)
                     val (m_bal, _) = #info_bal_val m_info_entry
                     fun check_ref x =
                         Msg.is_one_a x orelse
-                        case get_bal_val x of
-                            (bal, _) => Msg.Ballot.compare (bal, m_bal) = LESS
+                        Msg.Ballot.compare (ballot x, m_bal) = LESS
                 in
                     List.all check_ref (Msg.get_refs m)
                 end
@@ -511,9 +510,8 @@ struct
     fun check_wellformed_and_update_info (s : state) (g : learner_graph) m : bool * state =
         case is_wellformed s g m of
             (false, _) => (false, s)
-          | (true, NONE) => (true, s)
-          | (true, SOME info_entry) =>
-            (true, State.store_info_entry s (m, info_entry))
+          | (true, info_entry_o) =>
+            (true, Option.fold (fn (e, s) => State.store_info_entry s (m, e)) s info_entry_o)
 
     fun hpaxos_node (id : node_id) (g : learner_graph) (mbox : mailbox) : t =
         Acc (id, Graph g, State.mk (), mbox)
