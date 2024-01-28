@@ -2,7 +2,7 @@ functor Network (
     structure N : PROTOCOL_NODE
     structure D : NETWORK_MODEL_DISPATCHER
     sharing N.Endpoint = D.Endpoint
-) : NETWORK =
+) : NETWORK_MODEL =
 struct
 
 fun snd (_, x) = x
