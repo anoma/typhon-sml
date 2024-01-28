@@ -1,27 +1,21 @@
-structure MessageMock =
+functor Network (
+    structure N : PROTOCOL_NODE
+    structure D : NETWORK_MODEL_DISPATCHER
+    sharing N.Endpoint = D.Endpoint
+) : NETWORK =
 struct
-    type t = word
-    fun hash x = x
-    fun eq (x, y) =
-        case Word.compare (x, y) of EQUAL => true | _ => false
-    val print = Word.toString
-    fun fromString str = case Word.fromString str of
-                             SOME w => w
-                           | NONE => Word.fromInt 0
-end
 
-structure ShimMock = NetworkShim (MessageMock)
-structure NodeMock = NetworkNode (structure S = ShimMock)
-structure NetworkMockModel = Network (structure Shim = ShimMock
-                                      structure Node = NodeMock)
+fun snd (_, x) = x
 
-structure RunMockModel =
-struct
-    fun main (_, argv) =
-        let
-            val cfg : NetworkConfig.t = { node_ids = ["node0"] }
-        in
-            TextIO.print "Running...\n";
-            RunCML.doit (NetworkMockModel.launch cfg, NONE)
-        end
+(* structure Endpoint = Node.Endpoint *)
+type param = N.param
+
+fun create node_params =
+    (* TODO syntax *)
+    let
+        val nodes = map N.launch node_params
+        val endpoints = map snd nodes
+    in
+        ignore(CML.spawn (D.dispatch endpoints))
+    end
 end
