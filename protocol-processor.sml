@@ -1,4 +1,3 @@
-
 functor ProtocolProcessor (structure Proto : PROTOCOL
                            structure Mailbox : PROTOCOL_NODE_MAILBOX
                            sharing Mailbox.Msg = Proto.Msg)
@@ -30,15 +29,14 @@ fun run (Node {id, mbox, state}) () =
         val in_msg = Mailbox.recv mbox
         val _ =
             if debug then (
-                (* TextIO.print *)
-                (*     (Int.toString id *)
-                (*      ^ ": state " *)
-                (*      ^ Proto.State.toString state ^ "\n"); *)
-                (* TextIO.print *)
-                (*     (Int.toString id *)
-                (*      ^ ": processing message " *)
-                (*      ^ Proto.Msg.toString in_msg ^ "\n"); *)
-                ()
+                TextIO.print
+                    (Int.toString id
+                     ^ ": state "
+                     ^ Proto.State.toString state ^ "\n");
+                TextIO.print
+                    (Int.toString id
+                     ^ ": processing message "
+                     ^ Proto.Msg.toString in_msg ^ "\n")
             )
             else ()
         val (out_msgs, state') = Proto.process (in_msg, state)
@@ -48,11 +46,10 @@ fun run (Node {id, mbox, state}) () =
                     (Int.toString id
                      ^ ": new state "
                      ^ Proto.State.toString state' ^ "\n");
-                (* TextIO.print *)
-                (*     (Int.toString id *)
-                (*      ^ ": sent messages " *)
-                (*      ^ StringUtil.print_join Proto.Msg.toString out_msgs ^ "\n") *)
-                ()
+                TextIO.print
+                    (Int.toString id
+                     ^ ": sent messages "
+                     ^ StringUtil.print_join Proto.Msg.toString out_msgs ^ "\n")
             )
             else ()
         val _ = app (Mailbox.send mbox) out_msgs
