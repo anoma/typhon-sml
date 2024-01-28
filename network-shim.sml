@@ -1,13 +1,27 @@
-functor NetworkShim (M : NETWORK_MESSAGE) : NETWORK_SHIM =
+functor TwoMailboxNetworkShim (M : NETWORK_MESSAGE)
+        : sig
+            include NETWORK_SHIM
+            include NETWORK_MODEL_ENDPOINT
+          end =
 struct
-    structure Msg = M
-
     type msg = M.t
+    type t = { inbound : msg Mailbox.mbox,
+               outbound : msg Mailbox.mbox }
 
-    datatype shim = Shim of msg Mailbox.mbox
-    type t = shim
+    fun shim () =
+        let open Mailbox in
+            { inbound = mailbox (), outbound = mailbox () }
+        end
 
-    fun create () = Shim (Mailbox.mailbox ())
-    fun broadcast (Shim mbox, msg) = Mailbox.send (mbox, msg)
-    fun recv (Shim mbox) = Mailbox.recv mbox
+    fun send {inbound, outbound} msg =
+        Mailbox.send (outbound, msg)
+
+    fun recv {inbound, outbound} =
+        Mailbox.recv inbound
+
+    fun poll_outbound {inbound, outbound} =
+        Mailbox.recvPoll outbound
+
+    fun put_inbound {inbound, outbound} msg =
+        Mailbox.send (inbound, msg)
 end

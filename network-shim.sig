@@ -1,11 +1,9 @@
 signature NETWORK_SHIM =
 sig
-    structure Msg : NETWORK_MESSAGE
-
     type t
-    type msg = Msg.t
+    type msg
 
-    val create : unit -> t
-    val broadcast : t * msg -> unit
+    val shim : unit -> t
+    val send : t -> msg -> unit
     val recv : t -> msg
 end
