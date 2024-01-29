@@ -18,7 +18,6 @@ network-shim.sig
 network-shim.sml
 network-model-dispatcher.sig
 network-model-dispatcher.sml
-network-model-config.sig
 network-model.sig
 network-model.sml
 ping-pong.sml
