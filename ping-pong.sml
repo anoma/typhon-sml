@@ -3,6 +3,7 @@ structure PPP = PingPongProtocol
 structure Shim = TwoMailboxNetworkShim (PPP.Msg)
 structure MBox = SimpleProtocolNodeMailbox(
     structure ProtoMsg = PPP.Msg
+    structure ProtoParam = PPP.Param
     structure Shim = Shim
 )
 structure PingPongProcessor = ProtocolProcessor(

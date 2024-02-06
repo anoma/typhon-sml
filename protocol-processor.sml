@@ -7,7 +7,8 @@ struct
 val debug = true
 
 structure Param = Proto.Param
-type param = Proto.param
+type param = Param.t
+
 type state = Proto.state
 
 structure Mailbox = Mailbox

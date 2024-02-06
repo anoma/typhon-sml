@@ -2,6 +2,8 @@ signature PROTOCOL_NODE_MAILBOX =
 sig
     type t
 
+    type param
+
     (* MUST *)
     structure Msg : PROTOCOL_MESSAGE
     type msg = Msg.t
@@ -12,5 +14,5 @@ sig
 
     val recv : t -> msg
     val send : t -> msg -> unit
-    val mailbox : shim -> t
+    val mailbox : shim * param -> t
 end
