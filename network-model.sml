@@ -1,13 +1,12 @@
 functor Network (
     structure N : PROTOCOL_NODE
     structure D : NETWORK_MODEL_DISPATCHER
-    sharing N.Endpoint = D.Endpoint
+    sharing type N.Endpoint.t = D.endpoint
 ) : NETWORK_MODEL =
 struct
 
 fun snd (_, x) = x
 
-(* structure Endpoint = Node.Endpoint *)
 type param = N.param
 
 fun create node_params =
@@ -18,4 +17,4 @@ fun create node_params =
     in
         ignore(CML.spawn (D.dispatch endpoints))
     end
-end
+end (* Network *)

@@ -4,8 +4,7 @@ struct
 
 val debug = false
 
-structure Endpoint = E
-type endpoint = Endpoint.t
+type endpoint = E.t
 
 fun dispatch endpoints () =
     let
