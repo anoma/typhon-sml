@@ -1,8 +1,12 @@
 functor SimpleProtocolNodeMailbox (structure ProtoMsg : PROTOCOL_MESSAGE
+                                   structure ProtoParam : PROTOCOL_PARAM
                                    structure Shim : NETWORK_SHIM
                                    sharing type ProtoMsg.t = Shim.msg)
         : PROTOCOL_NODE_MAILBOX =
 struct
+
+structure Param = ProtoParam
+type param = Param.t
 
 structure Msg = ProtoMsg
 type msg = Msg.t
@@ -34,6 +38,6 @@ fun send (MBox shim) msg =
         Shim.send shim raw_msg
     end
 
-fun mailbox shim = MBox shim
+fun mailbox (shim, param) = MBox shim
 
 end (* PingPongMailbox *)

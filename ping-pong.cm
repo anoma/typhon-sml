@@ -6,7 +6,7 @@ protocol-state.sig
 protocol-message.sig
 protocol.sig
 protocol-node-mailbox.sig
-protocol-node-mailbox.sml
+protocol-node-mailbox-simple.sml
 protocol-processor.sig
 protocol-processor.sml
 protocol-node.sig
