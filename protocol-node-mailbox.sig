@@ -1,7 +1,6 @@
 signature PROTOCOL_NODE_MAILBOX =
 sig
     type t
-
     type param
 
     (* MUST *)

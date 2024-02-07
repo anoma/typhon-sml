@@ -8,6 +8,10 @@ datatype ping_pong_msg =
          Pong of int * int
 type t = ping_pong_msg
 
+
+fun sender (Ping (id, seq)) = id
+  | sender (Pong (id, seq)) = id
+
 fun hash m = Word.fromInt 0
 
 fun eq (Ping (u, v), Ping (x, y)) = (u = x) andalso (v = y)
