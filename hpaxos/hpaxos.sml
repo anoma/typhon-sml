@@ -194,7 +194,7 @@ struct
         fun update_max (state as State (s, i, c)) m =
             let
                 fun max (a, b) =
-                    case Msg.Ballot.compare (a, b) of LESS => b | _ => a
+            end *)
                 val m_bal = fst (get_bal_val state m)
                 val cur_max = AlgoState.get_max s
                 val new_max = max (m_bal, cur_max)
