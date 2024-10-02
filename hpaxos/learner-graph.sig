@@ -2,8 +2,8 @@ signature LEARNER_GRAPH =
 sig
     type t
 
-    structure Epoch : EPOCH
-    type epoch = Epoch.t
+    (* structure Epoch : EPOCH
+    type epoch = Epoch.t *)
 
     structure Learner : LEARNER
     type learner = Learner.t
@@ -11,7 +11,7 @@ sig
     structure Acceptor : ACCEPTOR
     type acceptor = Acceptor.t
 
-    val epoch : t -> epoch
+    (* val epoch : t -> epoch *)
     val learners : t -> learner list
     val acceptors : t -> acceptor list
 
