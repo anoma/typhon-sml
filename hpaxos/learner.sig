@@ -2,11 +2,9 @@ signature LEARNER =
 sig
     type t
     val id : t -> word
-    val eq : t * t -> bool
-end
+    val hash : t -> word
 
-functor LearnerOrdKey (L : LEARNER) : ORD_KEY =
-struct
-    type ord_key = L.t
-    fun compare (l1, l2) = Word.compare (L.id l1, L.id l2)
+    val eq : t * t -> bool
+    val gt : t * t -> bool
+    val compare : t * t -> order
 end
