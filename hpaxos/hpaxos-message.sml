@@ -1,65 +1,110 @@
-(* HPaxos Message *)
+structure HPaxosMessage (*: HPAXOS_MESSAGE*) =
+struct
+    infix |>
+    fun x |> f = f x
 
-signature HPAXOS_VALUE =
-sig
-    type t
-    val default : t (* default value *)
-    val eq : t * t -> bool (* equality *)
-end
+    type hash = word
 
-signature HPAXOS_BALLOT =
-sig
-    type t
-    val zero : t (* the smallest ballot *)
-    val eq : t * t -> bool
-    val compare : t * t -> order
-end
-
-signature HPAXOS_MESSAGE =
-sig
-    type t
-    datatype typ = OneA
-                 | OneB
-                 | TwoA
-
-    structure Value : HPAXOS_VALUE
-    type value = Value.t
-
-    structure Ballot : HPAXOS_BALLOT
-    type ballot = Ballot.t
-
-    structure Learner : LEARNER
+    structure Learner = Learner
     type learner = Learner.t
 
-    structure Acceptor : ACCEPTOR
+    structure Value = HPaxosValue
+    type value = Value.t
+
+    structure Ballot = HPaxosBallot
+    type ballot = Ballot.t
+
+    structure Acceptor = HPaxosAcceptor
     type acceptor = Acceptor.t
 
-    val hash : t -> word
-    val eq : t * t -> bool
+    datatype msg =
+        OneA of (
+                ballot *        (* ballot *)
+                hash            (* message hash *)
+                )
+        | OneB of (
+                acceptor *      (* sender *)
+                msg list *      (* references *)
+                msg option *    (* previous message *)
+                hash            (* message hash *)
+                )
+        | TwoA of (
+                acceptor *      (* sender *)
+                msg list *      (* references *)
+                msg option *    (* previous message *)
+                learner list *  (* list of learners *)
+                hash            (* message hash *)
+                )
+    
+    type t = msg
 
-    val typ : t -> typ
+    fun hash (OneA (_, h) | OneB (_, _, _, h) | TwoA (_, _, _, _, h)) = h
 
-    val is_one_a : t -> bool
-    val is_one_b : t -> bool
-    val is_two_a : t -> bool
+    fun compute_hash (OneA (bal, _)) =
+        Ballot.hash bal
+      | compute_hash (OneB (_, refs, prev, _)) =
+        let
+            val refs_hash = List.map hash refs
+            val prev_hash = map_or prev [] (fn p => [hash p])
+            val hashes = [prev_hash, refs_hash] |> List.concat
+        in
+            Hashing.hash hashes
+        end
+      | compute_hash (TwoA (_, refs, prev, lrs, _)) =
+        let
+            val refs_hash = List.map hash refs
+            val prev_hash = map_or prev [] (fn p => [hash p])
+            val lrs_hash = List.map Learner.hash lrs
+            val hashes = [prev_hash, refs_hash, lrs_hash] |> List.concat
+        in
+            Hashing.hash hashes
+        end
 
-    val mk_one_b : t option * t list -> t
-    val mk_two_a : t option * t list * learner -> t
+    (* TODO check if equality is used *)
+    fun eq (OneA (_, h1), OneA (_, h2)) = h1 = h2
+      | eq (OneB (_, _, _, h1), OneB (_, _, _, h2)) = h1 = h2
+      | eq (TwoA (_, _, _, _, h1), TwoA (_, _, _, _, h2)) = h1 = h2
+      | eq (_, _) = false
 
-    (* if the message is 2a, return its learner instance; otherwise, return NONE *)
-    val learner : t -> learner option
+    (* fun typ (Msg (t, _, _, _, _)) = t *)
 
-    (* returns message sender *)
-    val sender : t -> acceptor
+    fun is_one_a (OneA _) = true
+      | is_one_a _ = false
 
-    (* if the message is 1a, return its ballot and value; otherwise, return NONE *)
-    val get_bal_val : t -> (ballot * value) option
+    fun is_one_b (OneB _) = true
+      | is_one_b _ = false
 
-    (* returns a previous message of the sender *)
-    val get_prev : t -> t option
+    fun is_two_a (TwoA _) = true
+      | is_two_a _ = false
 
-    (* returns a list of direct references *)
-    val get_refs : t -> t list
+    (* TODO this should be raw? *)
+    fun mk_one_b (sender, prev_msg, recent_msgs) =
+        let val hash = Word.fromInt 42 in
+            OneB (sender, recent_msgs, prev_msg, hash)
+        end
+    
+    (* TODO this should be raw? *)
+    fun mk_two_a (sender, prev_msg, recent_msgs, learners) =
+        let val hash = Word.fromInt 42 in
+            TwoA (sender, recent_msgs, prev_msg, learners, hash)
+        end
+    
+    fun learners (TwoA (_, _, _, ls, _)) = ls
+      | learners _ = []
+    
+    fun sender (OneB (sender, _, _, _)) = sender
+      | sender (TwoA (sender, _, _, _, _)) = sender
+      | sender _ = raise Fail "sender not defined"
+
+    fun get_bal_val (OneA (b, _)) =
+        let val v = Ballot.value b in SOME (b, v) end
+      | get_bal_val _ = NONE
+    
+    fun get_prev (OneA _) = NONE
+      | get_prev (OneB (_, _ , prev, _) | TwoA (_, _ , prev, _, _)) = prev
+
+    fun get_refs (OneA _) = []
+      | get_refs (OneB (_, refs , _, _) | TwoA (_, refs , _, _, _)) = refs
 end
 
 functor MessageOrdKey (Msg : HPAXOS_MESSAGE) : ORD_KEY =
@@ -71,6 +116,9 @@ end
 functor MessageUtil (Msg : HPAXOS_MESSAGE) =
 struct
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
+
+    type msg = Msg.t
+    type ballot = Msg.Ballot.t
 
     (* fun does_reference_1a m : bool = *)
     (*     isSome (List.find Msg.is_one_a (Msg.get_refs m)) *)
@@ -101,8 +149,8 @@ struct
     (* checks if m2 is in transitive closure of prev for m1 *)
     structure PrevTran :>
               sig
-                  val is_prev_reachable : Msg.t * Msg.t -> bool
-                  val is_prev_reachable' : (Msg.t -> Msg.Ballot.t) -> Msg.t * Msg.t -> bool
+                  val is_prev_reachable : msg * msg -> bool
+                  val is_prev_reachable' : (msg -> ballot) -> msg * msg -> bool
               end =
     struct
     fun is_prev_reachable_aux cont (m1, m2) =
@@ -129,7 +177,7 @@ struct
     end (* PrevTran *)
 
     (* compute transitive references of the message *)
-    fun tran pred cont m =
+    fun tran (pred : msg -> bool) (cont : msg -> bool) (m : msg) =
         let
             fun loop accu visited [] = accu
               | loop accu visited (x :: tl) =
