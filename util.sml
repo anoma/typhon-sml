@@ -5,6 +5,8 @@ fun snd (_, x) = x
 fun map_or (x : 'a option) (default : 'b) (f : 'a -> 'b) =
     case x of SOME v => f v | NONE => default
 
+fun flip f x y = f y x
+
 fun assert cond str =
     if cond then () else raise Fail ("assert " ^ str)
 
