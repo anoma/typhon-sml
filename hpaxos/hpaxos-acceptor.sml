@@ -1,8 +1,9 @@
-signature ACCEPTOR =
-sig
-    type t
-    val pubkey : t -> word
-    val eq : t * t -> bool
+structure HPaxosAcceptor =
+struct
+    type t = word
+
+    fun pubkey a = a
+    val eq : t * t -> bool = (op =)
 end
 
 functor AcceptorOrdKey (A : ACCEPTOR) : ORD_KEY =
