@@ -17,21 +17,14 @@ sig
     val hash : t -> word
     val eq : t * t -> bool
 
-    val is_one_a : t -> bool
-    val is_one_b : t -> bool
-    val is_two_a : t -> bool
+    val is_proposal : t -> bool
 
-    val mk_one_b : t option * t list -> t
-    val mk_two_a : t option * t list * learner list -> t
-
-    (* if the message is 2a, return a sorted list of learner instance for which quorums are defined;
-       otherwise, return an empty list. *)
-    val learners : t -> learner list
+    val mk_non_proposal : t option * t list -> t
 
     (* returns message sender *)
     val sender : t -> acceptor
 
-    (* if the message is 1a, return its ballot and value; otherwise, return NONE *)
+    (* if the message is a proposal, return its ballot and value; otherwise, return NONE *)
     val get_bal_val : t -> (ballot * value) option
 
     (* returns a previous message of the sender *)

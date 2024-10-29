@@ -18,93 +18,59 @@ struct
     type acceptor = Acceptor.t
 
     datatype msg =
-        OneA of (
+        Proposal of (
                 ballot *        (* ballot *)
                 hash            (* message hash *)
                 )
-        | OneB of (
+        | NonProposal of (
                 acceptor *      (* sender *)
                 msg list *      (* references *)
                 msg option *    (* previous message *)
-                hash            (* message hash *)
-                )
-        | TwoA of (
-                acceptor *      (* sender *)
-                msg list *      (* references *)
-                msg option *    (* previous message *)
-                learner list *  (* list of learners *)
                 hash            (* message hash *)
                 )
     
     type t = msg
 
-    fun hash (OneA (_, h) | OneB (_, _, _, h) | TwoA (_, _, _, _, h)) = h
+    fun hash (Proposal (_, h) | NonProposal (_, _, _, h)) = h
 
-    fun compute_hash (OneA (bal, _)) =
+    fun compute_hash (Proposal (bal, _)) =
         Ballot.hash bal
-      | compute_hash (OneB (_, refs, prev, _)) =
+      | compute_hash (NonProposal (_, refs, prev, _)) =
         let
             val refs_hash = List.map hash refs
             val prev_hash = map_or prev [] (fn p => [hash p])
-            val hashes = [prev_hash, refs_hash] |> List.concat
         in
-            Hashing.hash hashes
-        end
-      | compute_hash (TwoA (_, refs, prev, lrs, _)) =
-        let
-            val refs_hash = List.map hash refs
-            val prev_hash = map_or prev [] (fn p => [hash p])
-            val lrs_hash = List.map Learner.hash lrs
-            val hashes = [prev_hash, refs_hash, lrs_hash] |> List.concat
-        in
-            Hashing.hash hashes
+            prev_hash @ refs_hash |> Hashing.hash
         end
 
     (* TODO check if equality is used *)
-    fun eq (OneA (_, h1), OneA (_, h2)) = h1 = h2
-      | eq (OneB (_, _, _, h1), OneB (_, _, _, h2)) = h1 = h2
-      | eq (TwoA (_, _, _, _, h1), TwoA (_, _, _, _, h2)) = h1 = h2
+    fun eq (Proposal (_, h1), Proposal (_, h2)) = h1 = h2
+      | eq (NonProposal (_, _, _, h1), NonProposal (_, _, _, h2)) = h1 = h2
       | eq (_, _) = false
 
     (* fun typ (Msg (t, _, _, _, _)) = t *)
 
-    fun is_one_a (OneA _) = true
-      | is_one_a _ = false
-
-    fun is_one_b (OneB _) = true
-      | is_one_b _ = false
-
-    fun is_two_a (TwoA _) = true
-      | is_two_a _ = false
+    fun is_proposal (Proposal _) = true
+      | is_proposal _ = false
 
     (* TODO this should be raw? *)
-    fun mk_one_b (sender, prev_msg, recent_msgs) =
+    fun mk_non_proposal (sender, prev_msg, recent_msgs) =
         let val hash = Word.fromInt 42 in
-            OneB (sender, recent_msgs, prev_msg, hash)
+            NonProposal (sender, recent_msgs, prev_msg, hash)
         end
     
-    (* TODO this should be raw? *)
-    fun mk_two_a (sender, prev_msg, recent_msgs, learners) =
-        let val hash = Word.fromInt 42 in
-            TwoA (sender, recent_msgs, prev_msg, learners, hash)
-        end
-    
-    fun learners (TwoA (_, _, _, ls, _)) = ls
-      | learners _ = []
-    
-    fun sender (OneB (sender, _, _, _)) = sender
-      | sender (TwoA (sender, _, _, _, _)) = sender
+    fun sender (NonProposal (sender, _, _, _)) = sender
       | sender _ = raise Fail "sender not defined"
 
-    fun get_bal_val (OneA (b, _)) =
+    fun get_bal_val (Proposal (b, _)) =
         let val v = Ballot.value b in SOME (b, v) end
       | get_bal_val _ = NONE
     
-    fun get_prev (OneA _) = NONE
-      | get_prev (OneB (_, _ , prev, _) | TwoA (_, _ , prev, _, _)) = prev
+    fun get_prev (Proposal _) = NONE
+      | get_prev (NonProposal (_, _ , prev, _)) = prev
 
-    fun get_refs (OneA _) = []
-      | get_refs (OneB (_, refs , _, _) | TwoA (_, refs , _, _, _)) = refs
+    fun get_refs (Proposal _) = []
+      | get_refs (NonProposal (_, refs , _, _)) = refs
 end
 
 functor MessageOrdKey (Msg : HPAXOS_MESSAGE) : ORD_KEY =
@@ -126,9 +92,9 @@ struct
     fun references_exactly_one_1a m : bool =
         let fun check (x, (found, false)) = (found, false)
               | check (x, (false, true)) =
-                if Msg.is_one_a x then (true, true) else (false, true)
+                if Msg.is_proposal x then (true, true) else (false, true)
               | check (x, (true, true)) =
-                if Msg.is_one_a x then (true, false) else (true, true)
+                if Msg.is_proposal x then (true, false) else (true, true)
         in
             case foldl check (false, true) (Msg.get_refs m) of
                 (found, no_second) => found andalso no_second
