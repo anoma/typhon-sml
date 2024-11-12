@@ -24,12 +24,6 @@ struct
     structure LearnerSet : ORD_SET = RedBlackSetFn (LearnerOrdKey (Msg.Learner))
     structure LearnerMap : ORD_MAP = RedBlackMapFn (LearnerOrdKey (Msg.Learner))
 
-    structure LearnerAcceptorMap : ORD_MAP =
-        RedBlackMapFn (
-            ProdLexOrdKey
-                (LearnerOrdKey (Msg.Learner))
-                (AcceptorOrdKey (Msg.Acceptor)))
-
     structure LearnerMsgMap : ORD_MAP =
         RedBlackMapFn (
             ProdLexOrdKey
@@ -125,7 +119,7 @@ struct
     struct
         type info_entry = { info_type : MessageType.t,
                             info_bal_val : ballot * value,
-                            info_W : (msg * msg option) LearnerAcceptorMap.map,
+                            info_W : (msg * msg option) LearnerMap.map,
                             info_acc_status : AcceptorStatus.t AcceptorMap.map,
                             info_unburied_2as : MsgSet.set LearnerMap.map,
                             info_q : (acceptor list) LearnerMap.map,
@@ -291,14 +285,14 @@ struct
         end
 
     (* [msg_to_bal_val] returns a pair (ballot, value) for each known message and the message m *)
-    (* [msg_to_w] returns a (msg * msg option) LearnerAcceptorMap.map for each known message, excluding 1a *)
+    (* [msg_to_w] returns a (msg * msg option) LearnerMap.map for each known message, excluding 1a *)
     (* REQUIRES: m is not 1a *)
     fun compute_W (m : msg) (m_type : MessageType.t) (g : learner_graph) msg_to_bal_val msg_to_w
-        : (msg * msg option) LearnerAcceptorMap.map =
+        : (msg * msg option) LearnerMap.map =
         let
-            val empty = LearnerAcceptorMap.empty
-            val insert = LearnerAcceptorMap.insert
-            val unionWith = LearnerAcceptorMap.unionWith
+            val empty = LearnerMap.empty
+            val insert = LearnerMap.insert
+            val unionWith = LearnerMap.unionWith
 
             fun pick_best_two_from_list (ms : msg list) : (msg * msg option) option =
                 let
@@ -340,19 +334,14 @@ struct
                 end
             val w0 =
                 if MessageType.is_two_a m_type then
-                    let
-                        val m_acc = Msg.sender m
-                    in
-                        LearnerGraph.learners g
-                        |> List.foldl
-                            (fn (alpha, u) => insert (u, (alpha, m_acc), (m, NONE)))
-                            empty
-                    end
+                    LearnerGraph.learners g
+                    |> List.foldl
+                        (fn (alpha, u) => insert (u, alpha, (m, NONE)))
+                        empty
                 else
                     empty
         in
-            m
-            |> Msg.get_refs
+            Msg.get_refs m
             |> List.filter (not o Msg.is_proposal)
             |> List.foldl (fn (r, w) => unionWith pick_best_two (msg_to_w r, w)) w0
         end
@@ -373,7 +362,7 @@ struct
         end
 
     (* [msg_to_bal_val] returns a pair (ballot, value) for each known message and the message m *)
-    (* [msg_to_w] returns a (msg * msg option) LearnerAcceptorMap.map for each known message, excluding 1a *)
+    (* [msg_to_w] returns a (msg * msg option) LearnerMap.map for each known message, excluding 1a *)
     (* [msg_to_unburied] returns a set MsgSet.set for each known message, excluding 1a *)
     (* REQUIRES: m is not 1a *)
     fun compute_unburied_2as
@@ -400,24 +389,15 @@ struct
                     not (Msg.Value.eq (x_val, z_val))
                 end
 
-            val get_w = Fn.curry LearnerAcceptorMap.lookup m_W
+            val get_w = Fn.curry LearnerMap.lookup m_W
             val all_acceptors = LearnerGraph.acceptors g
 
             fun compute_unburied_2as_for_learner (beta : learner) =
                 let
+                    val (best1, o_best2) = get_w beta 
                     fun buried x =
-                        let
-                            fun check acc =
-                                let
-                                    val (best1, o_best2) = get_w (beta, acc) 
-                                in
-                                    burying beta (x, best1) orelse
-                                    (isSome o_best2 andalso burying beta (x, (valOf o_best2)))
-                                end
-                            val acceptors = List.filter check all_acceptors
-                        in
-                            LearnerGraph.is_quorum g (beta, acceptors)
-                        end
+                        burying beta (x, best1) orelse
+                        (isSome o_best2 andalso burying beta (x, (valOf o_best2)))
                     val u0 = if MessageType.is_two_a m_type then MsgSet.singleton m else MsgSet.empty
                 in
                     m
