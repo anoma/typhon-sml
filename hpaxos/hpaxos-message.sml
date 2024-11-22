@@ -1,65 +1,76 @@
-(* HPaxos Message *)
+structure HPaxosMessage (*: HPAXOS_MESSAGE*) =
+struct
+    infix |>
+    fun x |> f = f x
 
-signature HPAXOS_VALUE =
-sig
-    type t
-    val default : t (* default value *)
-    val eq : t * t -> bool (* equality *)
-end
+    type hash = word
 
-signature HPAXOS_BALLOT =
-sig
-    type t
-    val zero : t (* the smallest ballot *)
-    val eq : t * t -> bool
-    val compare : t * t -> order
-end
-
-signature HPAXOS_MESSAGE =
-sig
-    type t
-    datatype typ = OneA
-                 | OneB
-                 | TwoA
-
-    structure Value : HPAXOS_VALUE
-    type value = Value.t
-
-    structure Ballot : HPAXOS_BALLOT
-    type ballot = Ballot.t
-
-    structure Learner : LEARNER
+    structure Learner = Learner
     type learner = Learner.t
 
-    structure Acceptor : ACCEPTOR
+    structure Value = HPaxosValue
+    type value = Value.t
+
+    structure Ballot = HPaxosBallot
+    type ballot = Ballot.t
+
+    structure Acceptor = HPaxosAcceptor
     type acceptor = Acceptor.t
 
-    val hash : t -> word
-    val eq : t * t -> bool
+    datatype msg =
+        Proposal of (
+                ballot *        (* ballot *)
+                hash            (* message hash *)
+                )
+        | NonProposal of (
+                acceptor *      (* sender *)
+                msg list *      (* references *)
+                msg option *    (* previous message *)
+                hash            (* message hash *)
+                )
+    
+    type t = msg
 
-    val typ : t -> typ
+    fun hash (Proposal (_, h) | NonProposal (_, _, _, h)) = h
 
-    val is_one_a : t -> bool
-    val is_one_b : t -> bool
-    val is_two_a : t -> bool
+    fun compute_hash (Proposal (bal, _)) =
+        Ballot.hash bal
+      | compute_hash (NonProposal (_, refs, prev, _)) =
+        let
+            val refs_hash = List.map hash refs
+            val prev_hash = map_or prev [] (fn p => [hash p])
+        in
+            prev_hash @ refs_hash |> Hashing.hash
+        end
 
-    val mk_one_b : t option * t list -> t
-    val mk_two_a : t option * t list * learner -> t
+    (* TODO check if equality is used *)
+    fun eq (Proposal (_, h1), Proposal (_, h2)) = h1 = h2
+      | eq (NonProposal (_, _, _, h1), NonProposal (_, _, _, h2)) = h1 = h2
+      | eq (_, _) = false
 
-    (* if the message is 2a, return its learner instance; otherwise, return NONE *)
-    val learner : t -> learner option
+    (* fun typ (Msg (t, _, _, _, _)) = t *)
 
-    (* returns message sender *)
-    val sender : t -> acceptor
+    fun is_proposal (Proposal _) = true
+      | is_proposal _ = false
 
-    (* if the message is 1a, return its ballot and value; otherwise, return NONE *)
-    val get_bal_val : t -> (ballot * value) option
+    (* TODO this should be raw? *)
+    fun mk_non_proposal (sender, prev_msg, recent_msgs) =
+        let val hash = Word.fromInt 42 in
+            NonProposal (sender, recent_msgs, prev_msg, hash)
+        end
+    
+    fun sender (NonProposal (sender, _, _, _)) = sender
+      | sender _ = raise Fail "sender not defined"
 
-    (* returns a previous message of the sender *)
-    val get_prev : t -> t option
+    fun get_bal_val (Proposal (b, _)) =
+        let val v = Ballot.value b in SOME (b, v) end
+      | get_bal_val _ = NONE
+    
+    fun get_prev (Proposal _) = NONE
+      | get_prev (NonProposal (_, _ , prev, _)) = prev
 
-    (* returns a list of direct references *)
-    val get_refs : t -> t list
+    fun get_refs (Proposal _) = []
+      | get_refs (NonProposal (_, refs , _, _)) = refs
 end
 
 functor MessageOrdKey (Msg : HPAXOS_MESSAGE) : ORD_KEY =
@@ -72,15 +83,18 @@ functor MessageUtil (Msg : HPAXOS_MESSAGE) =
 struct
     structure MsgSet : ORD_SET = RedBlackSetFn (MessageOrdKey (Msg))
 
+    type msg = Msg.t
+    type ballot = Msg.Ballot.t
+
     (* fun does_reference_1a m : bool = *)
     (*     isSome (List.find Msg.is_one_a (Msg.get_refs m)) *)
 
     fun references_exactly_one_1a m : bool =
         let fun check (x, (found, false)) = (found, false)
               | check (x, (false, true)) =
-                if Msg.is_one_a x then (true, true) else (false, true)
+                if Msg.is_proposal x then (true, true) else (false, true)
               | check (x, (true, true)) =
-                if Msg.is_one_a x then (true, false) else (true, true)
+                if Msg.is_proposal x then (true, false) else (true, true)
         in
             case foldl check (false, true) (Msg.get_refs m) of
                 (found, no_second) => found andalso no_second
@@ -101,8 +115,8 @@ struct
     (* checks if m2 is in transitive closure of prev for m1 *)
     structure PrevTran :>
               sig
-                  val is_prev_reachable : Msg.t * Msg.t -> bool
-                  val is_prev_reachable' : (Msg.t -> Msg.Ballot.t) -> Msg.t * Msg.t -> bool
+                  val is_prev_reachable : msg * msg -> bool
+                  val is_prev_reachable' : (msg -> ballot) -> msg * msg -> bool
               end =
     struct
     fun is_prev_reachable_aux cont (m1, m2) =
@@ -129,7 +143,7 @@ struct
     end (* PrevTran *)
 
     (* compute transitive references of the message *)
-    fun tran pred cont m =
+    fun tran (pred : msg -> bool) (cont : msg -> bool) (m : msg) =
         let
             fun loop accu visited [] = accu
               | loop accu visited (x :: tl) =
