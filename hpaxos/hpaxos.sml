@@ -176,19 +176,16 @@ struct
         fun get_recent (State (s, _, _)) = AlgoState.get_recent s
         fun clear_recent (State (s, i, c)) = State (AlgoState.clear_recent s, i, c)
 
+        fun add_recent m (State (s, i, c)) =
+            State (AlgoState.add_recent s m, i, c)
+
         fun get_prev (State (s, _, _)) = AlgoState.get_prev s
-        fun set_prev (State (s, i, c)) m = State (AlgoState.set_prev s m, i, c)
+        fun set_prev m (State (s, i, c)) = State (AlgoState.set_prev s m, i, c)
 
         fun is_non_wellformed (State (s, _, _)) = AlgoState.is_non_wellformed s
 
         (* fun add_known (State (s, i, c)) m =
             State (AlgoState.add_known s m, i, c) *)
-
-        fun add_recent (State (s, i, c)) m =
-            State (AlgoState.add_recent s m, i, c)
-
-        (* fun add_known_recent (State (s, i, c)) m =
-            State (AlgoState.add_recent (AlgoState.add_known s m) m, i, c) *)
 
         fun add_non_wellformed (State (s, i, c)) m =
             State (AlgoState.add_non_wellformed s m, i, c)
@@ -218,7 +215,7 @@ struct
                 State (AlgoState.set_max s new_max, i, c)
             end *)
 
-        fun get_learners (State (_, i, _)) m = MessageInfo.get_learners i m
+        fun get_learners (State (_, i, _)) = MessageInfo.get_learners i
         fun get_W (State (_, i, _)) = MessageInfo.get_W i
         fun get_acc_status (State (_, i, _)) = MessageInfo.get_acc_status i
         fun get_unburied_2as (State (_, i, _)) = MessageInfo.get_unburied_2as i
@@ -400,8 +397,7 @@ struct
                         (isSome o_best2 andalso burying beta (x, (valOf o_best2)))
                     val u0 = if MessageType.is_two_a m_type then MsgSet.singleton m else MsgSet.empty
                 in
-                    m
-                    |> Msg.get_refs
+                    Msg.get_refs m
                     |> List.filter (not o Msg.is_proposal)
                     |> List.foldl
                         (fn (r, u) =>
@@ -545,7 +541,13 @@ struct
             }
         end
 
-    fun prev_wellformed (m : msg) : bool =
+    (* I implement a stricter version of ChainRef predicate. Namely:
+       - If the given message mentions a previous message,
+       I check that the refs contains the mentioned previous message
+       an no other message from the same sender.
+       - If the given message claims that there was no previous message,
+       I check that no message from the same sender is referenced. *)
+    fun chain_ref (m : msg) : bool =
         let
             val m_refs = List.filter (not o Msg.is_proposal) (Msg.get_refs m)
             val m_acc = Msg.sender m
@@ -555,7 +557,8 @@ struct
                 NONE => List.all (not o from_this_sender) m_refs
               | SOME prev =>
                 isSome (List.find (Fn.curry Msg.eq prev) m_refs) andalso
-                let fun check_ref x =
+                let
+                    fun check_ref x =
                         not (from_this_sender x) orelse Msg.eq (x, prev)
                 in
                     List.all check_ref m_refs
@@ -590,43 +593,40 @@ struct
                         Msg.is_proposal x orelse
                         Msg.Ballot.compare (ballot x, m_bal) = LESS
                 in
-                    m
-                    |> Msg.get_refs
-                    |> List.all check_ref
+                    Msg.get_refs m |> List.all check_ref
                 end
 
             fun is_wellformed_2a m (m_info_entry : MessageInfo.info_entry) =
                 not (null (Msg.get_refs m)) andalso
                 not (null (#info_learners m_info_entry))
 
-            fun is_wellformed_non_proposal m (m_info_entry : MessageInfo.info_entry) =
+            fun check_is_wellformed m (m_info_entry : MessageInfo.info_entry) =
                 if MessageType.is_one_b (#info_type m_info_entry) then
                     is_wellformed_1b m m_info_entry
                 else
                     is_wellformed_2a m m_info_entry
-        in
-            (* optionally, we might want to check that every reference occurs at most once (call to refs_nondup) *)
-            (* TODO actually, do it in the mailbox implementation *)
-            if prev_wellformed m andalso MsgUtil.refs_nondup m then
-            (
-                if Msg.is_proposal m then
-                    (true, NONE)
-                else
-                (
+
+            fun is_wellformed_acceptor_message m =
+                (* optionally, we might want to check that every reference occurs at most once (call to refs_nondup) *)
+                (* TODO actually, do it in the mailbox (receiver) implementation *)
+                if MsgUtil.refs_nondup m andalso chain_ref m then
                     let
                         val m_info_entry =
                             compute_msg_info_entry s g m
                                 get_bal_val get_learners get_W get_acc_status get_unburied_2as
                     in
-                        if is_wellformed_non_proposal m m_info_entry then
+                        if check_is_wellformed m m_info_entry then
                             (true, SOME m_info_entry)
                         else
                             (false, NONE)
                     end
-                )
-            )
+                else
+                    (false, NONE)
+        in
+            if Msg.is_proposal m then
+                (true, NONE)
             else
-                (false, NONE)
+                is_wellformed_acceptor_message m
         end
 
     fun check_wellformed_and_update_info (s : State.t, g : learner_graph, m : msg)
@@ -648,69 +648,40 @@ struct
 
     fun handle_msg (ServerState.State (g, s), m) =
         let
-            fun process_1a s m : State.t * msg option =
+            fun process s m : State.t * msg option =
                 let
                     val prev = State.get_prev s
                     val recent = MsgSet.add (State.get_recent s, m) |> MsgSet.toList
-                    val new_1b = Msg.mk_non_proposal (prev, recent)
-                    val (is_wf, s) = check_wellformed_and_update_info (s, g, new_1b)
+                    val new = Msg.mk_msg (prev, recent)
+                    val (is_wf, s) = check_wellformed_and_update_info (s, g, new)
                 in
                     if is_wf then
                         let
                             fun update_state s =
                                 s
                                 |> State.clear_recent
-                                |> flip State.add_recent m
-                                |> flip State.set_prev new_1b
+                                |> State.add_recent new
+                                |> State.set_prev new
                         in
-                            (* broadcast new_1b *)
-                            (update_state s, SOME new_1b)
-                        end
-                    else (s, NONE)
-                end
-
-            fun process_1b s m : State.t * msg option =
-                let
-                    val prev = State.get_prev s
-                    val recent = MsgSet.toList (State.get_recent s)
-                    val new_2a = Msg.mk_non_proposal (prev, recent)
-                    val (is_wf, s) = check_wellformed_and_update_info (s, g, new_2a)
-                in
-                    if is_wf then
-                        let
-                            fun update_state s =
-                                s
-                                |> State.clear_recent
-                                |> flip State.add_recent m
-                                |> flip State.set_prev new_2a
-                        in
-                            (* broadcast new_2a *)
-                            (update_state s, SOME new_2a)
+                            (update_state s, SOME new)
                         end
                     else
-                        (* XXX add to recent? *)
-                        (s, NONE)
+                        let
+                            val s = if not (Msg.is_proposal m) then State.add_recent m s else s
+                        in
+                            (s, NONE)
+                        end
                 end
-
-            fun process_2a s m : State.t * msg option =
-                (State.add_recent s m, NONE)
         in
             let
-                val (res, s) =
+                val (is_wf, s) =
                     if has_non_wellformed_ref s m then
-                        (false, s)
+                        (false, process_non_wellformed s m)
                     else
                         check_wellformed_and_update_info (s, g, m)
                 val (s, new_msg) =
-                    if res then
-                        if Msg.is_proposal m then
-                            process_1a s m
-                        else (
-                            if State.is_one_b s m then
-                                process_1b s m
-                            else
-                                process_2a s m
-                        )
+                    if is_wf then
+                        process s m
                     else
                         (process_non_wellformed s m, NONE)
             in

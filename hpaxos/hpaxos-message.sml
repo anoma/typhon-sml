@@ -54,7 +54,7 @@ struct
       | is_proposal _ = false
 
     (* TODO this should be raw? *)
-    fun mk_non_proposal (sender, prev_msg, recent_msgs) =
+    fun mk_msg (sender, prev_msg, recent_msgs) =
         let val hash = Word.fromInt 42 in
             NonProposal (sender, recent_msgs, prev_msg, hash)
         end

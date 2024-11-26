@@ -19,7 +19,7 @@ sig
 
     val is_proposal : t -> bool
 
-    val mk_non_proposal : t option * t list -> t
+    val mk_msg : t option * t list -> t
 
     (* returns message sender *)
     val sender : t -> acceptor
